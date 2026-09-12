@@ -1,0 +1,1 @@
+los botones son objetos asi que los podemos tratar con getters y setters

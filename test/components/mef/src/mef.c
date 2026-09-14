@@ -33,7 +33,7 @@ void mefUpdate(void* param){
             }
             break;
         case LEFT:
-            driverMotorIzquierdo(ON); //Cuando los apagamos? revisar tema del delay cpaz va acá
+            driverMotorIzquierdo(ON); //Cuando los apagamos? revisar tema del delay cpaz va acÃ¡
             state = ESPERA;
             break;
         case RIGHT:

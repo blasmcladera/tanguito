@@ -11,6 +11,9 @@ void mefInit (void* param){
 void mefUpdate(void* param){
 
     switch (state){
+        case OFF:
+           
+           break;
         case MENU:
             //SE APRETO EL BOTON DE START
             if (flagButton1Pressed){
@@ -20,6 +23,8 @@ void mefUpdate(void* param){
             break;
         case ESPERA:
             //Este flag habria que ver que onda
+            driverMotorIzquierdo(OFF);
+            driverMotorDerecho(OFF);
             if (!flagShuffleTerminado){
                 delay();//Habria que ver que delay hace falta para que las cartas caigan bien
                 state = random(LEFT, RIGHT);
@@ -37,6 +42,7 @@ void mefUpdate(void* param){
             break;
         case ROTAR:
             //Este flag habria que ver que onda
+            driverMotorDealer(OFF);
             if (!flagDealTerminado){
                 rotar(x);
                 state = EYECTAR;

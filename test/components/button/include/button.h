@@ -1,5 +1,5 @@
-#ifndef _BUTTONS_H_
-#define _BUTTONS_H_
+#ifndef _BUTTON_H_
+#define _BUTTON_H_
 
 #include "sapi.h"
 
@@ -17,7 +17,6 @@ extern int flagButton3Pressed;
 extern int flagButton4Pressed;
 
 void buttonsInit(void* param);
-button_t* getButtonStart(void* param);
 
 // Prototipos boton 1
 void button1PressedCallback(void* param);

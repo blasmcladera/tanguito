@@ -1,29 +1,17 @@
-typedef enum {
-    OFF,
-    MENU,
-    ESPERA,
-    IZQUIERDA,
-    DERECHA,
-    ROTAR,
-    EYECTAR
-} state_t;
+#include "mef.h"
+
+
+void mainInit(){
+   mefInit();
+
+   
+}
 
 int main (void){
 
-    state_t state;
-    state = MENU;
+   mainInit();
+
     while (1) {
-        switch(state){
-        case (OFF):
-            //APARATO APAGADO, NO SERIA UN ESTADO XD
-            break;
-        case (MENU){
-            if ()
-        }
-
-
-
-        }
 
     }
 }

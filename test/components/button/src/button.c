@@ -1,4 +1,5 @@
-#include buttons.h
+#include "button.h"
+#include <stdio.h>
 
 //No se cuantos de estos terminemos usando al final, aca se pueden configurar todos.
 static button_t button1;
@@ -58,64 +59,83 @@ void buttonsInit(void* param){
         button4ReleasedCallback,   // releasedCallback
         button4HoldPressedCallback // holdPressedCallback
     );
+    
 }
 
-button_t* getButtonStart(void* param){
-    return &button1;
-}
+// Handlers boton 1
 
-//Handlers boton 1
 void button1PressedCallback(void* param)
 {
-   flagButton1Pressed = TRUE;
+    flagButton1Pressed = TRUE;
+    
 }
+
 void button1ReleasedCallback(void* param)
 {
-   printf("Boton 1 liberado\r\n");
+    printf("Boton 1 liberado\r\n");
+    
 }
+
 void button1HoldPressedCallback(void* param)
 {
-   printf("Boton 1 presionado durante mas de 3 segundos\r\n");
+    printf("Boton 1 presionado durante mas de 3 segundos\r\n");
+    
 }
 
-//Handlers boton 2
+// Handlers boton 2
+
 void button2PressedCallback(void* param)
 {
-   printf("Boton 2 presionado\r\n");
+    printf("Boton 2 presionado\r\n");
+    
 }
+
 void button2ReleasedCallback(void* param)
 {
-   printf("Boton 2 liberado\r\n");
+    printf("Boton 2 liberado\r\n");
+    
 }
+
 void button2HoldPressedCallback(void* param)
 {
-   printf("Boton 2 presionado durante mas de 3 segundos\r\n");
+    printf("Boton 2 presionado durante mas de 3 segundos\r\n");
+    
 }
 
-//Handlers boton 3
+// Handlers boton 3
+
 void button3PressedCallback(void* param)
 {
-   printf("Boton 3 presionado\r\n");
-}
-void button3ReleasedCallback(void* param)
-{
-   printf("Boton 3 liberado\r\n");
-}
-void button3HoldPressedCallback(void* param)
-{
-   printf("Boton 3 presionado durante mas de 3 segundos\r\n");
+    printf("Boton 3 presionado\r\n");
+    
 }
 
-//Handlers boton 4
+void button3ReleasedCallback(void* param)
+{
+    printf("Boton 3 liberado\r\n");
+    
+}
+
+void button3HoldPressedCallback(void* param)
+{
+    printf("Boton 3 presionado durante mas de 3 segundos\r\n");
+    
+}
+
+// Handlers boton 4
+
 void button4PressedCallback(void* param)
 {
-   printf("Boton 4 presionado\r\n");
+    printf("Boton 4 presionado\r\n");
+    
 }
+
 void button4ReleasedCallback(void* param)
 {
-   printf("Boton 4 liberado\r\n");
+    printf("Boton 4 liberado\r\n");
 }
+
 void button4HoldPressedCallback(void* param)
 {
-   printf("Boton 4 presionado durante mas de 3 segundos\r\n");
+    printf("Boton 4 presionado durante mas de 3 segundos\r\n");
 }

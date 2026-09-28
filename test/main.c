@@ -1,18 +1,14 @@
 #include "mef.h"
-
-
-void mainInit(){
-   mefInit();
-
-   
-}
+#include "event.h"
+#include "FreeRTOS.h"
 
 int main (void){
 
-   mainInit();
+   
+   
 
-    while (1) {
+   while (1) {
 
-    }
+   }
 }
 

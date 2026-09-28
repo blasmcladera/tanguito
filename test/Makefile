@@ -23,7 +23,7 @@ PROGRAM_NAME = app
 
 # Compilation and libraries configurations -----------------------------
 
-VERBOSE = n
+VERBOSE = y
 OPT = g
 USE_NANO = y
 USE_LTO = n

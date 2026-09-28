@@ -1,5 +1,22 @@
 #include "shuffler.h"
 #include "error.h"
+#include "event.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
+
+static void ShufflerTask(void * params){
+   while(1){
+      xEventGroupWaitBits(getMainEventGroup(),SHUFFLER_START, pdTRUE, pdTRUE, portMAX_DELAY);
+      for (;;) {//aca habria que ver si usar un contador o un timer ni idea
+         //random(izq o der)
+         //prender()
+         vTaskDelay(pdMS_TO_TICKS(2));//tiempo suficiente para que caiga la carta
+         //apagar
+      }
+      xEventGroupSetBits(getMainEventGroup(), SHUFFLER_DONE);
+   }
+}
 
 error_t motorShufflerInit(void* param)
 {
@@ -18,7 +35,10 @@ error_t motorShufflerEnable(shuffle_motor_t motor)
      * Habilita el TB6612FNG mediante su entrada STBY,
      * permitiendo que el driver controle el motor.
      */
-    return TANGUITO_OK;
+   
+   xTaskCreate(ShufflerTask,"ShufflerTask",255,NULL,0,NULL);
+   
+   return TANGUITO_OK;
 }
 
 error_t motorShufflerDisable(shuffle_motor_t motor)

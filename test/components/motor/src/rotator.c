@@ -1,5 +1,18 @@
 #include "rotator.h"
 #include "error.h"
+#include "event.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
+
+void RotatorTask(void * params){
+   while (1){
+      
+      
+   } 
+
+
+}
 
 error_t motorRotatorInit(void* param)
 {

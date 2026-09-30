@@ -17,10 +17,15 @@
 #include "stepper.h"
 #include "sapi_timer.h"
 
+
+
 /*==================[estado interno]=========================================*/
 
 static volatile uint32_t remainingSteps = 0;
 static volatile bool_t moving = FALSE;
+
+/* Resto fraccionario de pasos que no se pudo ejecutar, para no acumular error */
+static float stepResidue = 0.0f;
 
 static uint32_t configuredStepsPerSecond = 1000;
 static stepperDirection_t configuredDirection = STEPPER_DIRECTION_FORWARD;
@@ -234,4 +239,54 @@ void stepperStop( void )
 bool_t stepperIsBusy( void )
 {
    return moving;
+}
+
+
+/*
+ * Gira el engranaje de salida "Degrees" grados (positivo = FORWARD,
+ * negativo = REVERSE). Es no bloqueante: usar stepperIsBusy() para saber
+ * cuando termino.
+ */
+bool_t turnDegrees ( float Degrees){
+   const float degreesPerStep = STEPPER_STEP_ANGLE_DEG / STEPPER_MICROSTEPS; //Valor por si cambiamos la cantidad de grados por step
+   float stepsF;
+   int32_t stepsRounded;
+   uint32_t steps;
+   stepperDirection_t dir;
+
+   if( !attached || moving ) {
+      return FALSE;
+   }
+
+   /* Grados en la salida a grados en el eje del motor a pasos */
+   stepsF = (Degrees * STEPPER_GEAR_RATIO) / degreesPerStep + stepResidue;
+
+   /* Redondeo al entero mas cercano (con signo) */
+   stepsRounded = (int32_t)( (stepsF >= 0.0f) ? (stepsF + 0.5f)
+                                              : (stepsF - 0.5f) );
+
+   if( stepsRounded == 0 ) {
+      stepResidue = stepsF;   /* movimiento menor a un paso: lo acumulo */
+      return TRUE;
+   }
+
+   if( stepsRounded < 0 ) {
+      dir = STEPPER_DIRECTION_REVERSE;
+      steps = (uint32_t)(-stepsRounded);
+   } else {
+      dir = STEPPER_DIRECTION_FORWARD;
+      steps = (uint32_t)stepsRounded;
+   }
+
+   if( !stepperSetDirection( dir ) ) {
+      return FALSE;
+   }
+
+   if( !stepperMove( steps ) ) {
+      return FALSE;
+   }
+
+   stepResidue = stepsF - (float)stepsRounded;
+   return TRUE;
+
 }

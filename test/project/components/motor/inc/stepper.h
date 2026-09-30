@@ -53,6 +53,17 @@ extern "C" {
 #define STEPPER_STEP_HIGH_US 2UL
 #define STEPPER_STEP_LOW_US  2UL
 
+
+#define STEPPER_STEP_ANGLE_DEG   1.8f   // grados por paso completo del NEMA 
+
+/* Relación = dientes del engranaje grande / dientes del engranaje del motor.
+ * Ej: motor con 20 dientes y engranaje de 100 -> 5.0f
+ * Por ahora 1.0f (sin reducción) hasta saber los valores reales. */
+#define STEPPER_GEAR_RATIO       1.0f
+
+#define STEPPER_MICROSTEPS       1      /* 1, 2, 4, 8 o 16 según MS1/MS2/MS3 del A4988 */
+
+
 /*==================[tipos]==================================================*/
 
 typedef enum {
@@ -92,6 +103,12 @@ void stepperStop( void );
 
 /* TRUE mientras quedan pulsos por generar. */
 bool_t stepperIsBusy( void );
+
+
+/* Convierte la cantidad de grados en Steps que hace el suffler suponiendo que cada steps es 1,8 Grados*/
+bool_t turn_Degrees( float Degrees);
+
+
 
 /*==================[callbacks internos expuestos a sAPI Timer]============*/
 

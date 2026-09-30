@@ -42,8 +42,8 @@ extern uint32_t SystemCoreClock;
 #define configUSE_TICKLESS_IDLE            0
 #define configIDLE_SHOULD_YIELD            1
 #define configMAX_PRIORITIES               ( 5 )
-#define configMINIMAL_STACK_SIZE           ( ( unsigned short ) 128 )  /* en words, no bytes */
-#define configTOTAL_HEAP_SIZE              ( ( size_t ) ( 32 * 1024 ) )
+#define configMINIMAL_STACK_SIZE                     ( ( uint16_t ) 100 )
+#define configTOTAL_HEAP_SIZE                        ( ( size_t ) ( 8 * 1024 ) )
 #define configMAX_TASK_NAME_LEN            16
 
 /* ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ extern uint32_t SystemCoreClock;
 /* ---------------------------------------------------------------------------
  * Hooks (los implementas vos en tu main.c, igual que antes)
  * ------------------------------------------------------------------------- */
-#define configUSE_IDLE_HOOK                1
+#define configUSE_IDLE_HOOK                0
 #define configUSE_MALLOC_FAILED_HOOK       1
 #define configCHECK_FOR_STACK_OVERFLOW     2   /* metodo 2: mas robusto que 1 */
 #define configUSE_TICK_HOOK                0
@@ -104,6 +104,10 @@ extern uint32_t SystemCoreClock;
 #define INCLUDE_vTaskDelay                 1
 #define INCLUDE_xTaskGetSchedulerState     1
 #define INCLUDE_xTimerPendFunctionCall     0
+
+#define vPortSVCHandler     SVC_Handler
+#define xPortPendSVHandler  PendSV_Handler
+#define xPortSysTickHandler SysTick_Handler
 
 /* Cortex-M4F: la FPU se guarda por tarea automaticamente (lazy stacking) si
  * la tarea usa instrucciones de punto flotante; no hay macro de config para

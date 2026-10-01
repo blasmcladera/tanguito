@@ -36,7 +36,7 @@ error_t motorShufflerSetSpeed(uint8_t speed, shuffle_motor_t motor);
 error_t motorShufflerStart(shuffle_motor_t motor);
 error_t motorShufflerStop(shuffle_motor_t motor);
 
-void taskShuffler(void *);
+void ShufflerTask(void *);
 
 
 #endif

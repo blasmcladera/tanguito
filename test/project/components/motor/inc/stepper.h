@@ -62,6 +62,8 @@ typedef enum {
 
 /*==================[funciones publicas]====================================*/
 
+void StepperTask (void *);
+
 /* Inicializa la interfaz GPIO del A4988. */
 bool_t stepperInit( void );
 

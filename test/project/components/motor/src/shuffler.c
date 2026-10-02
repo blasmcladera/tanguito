@@ -106,30 +106,30 @@ error_t motorShufflerInit( void* param )
    }
 
    attached = TRUE;   // a partir de acá el resto de las funciones funcionan
-   return ERR_OK;
+   return TANGUITO_OK;
 }
 
 // Le da permiso al motor para andar. No lo prende: para eso está Start. 
 error_t motorShufflerEnable( shuffle_motor_t motor )
 {
    if( !motorIsValid( motor ) ) {
-      return ERR_INVALID_ARG;   // motor inexistente o driver sin inicializar
+      return TANGUITO_INVALID_PARAM;   // motor inexistente o driver sin inicializar
    }
 
    motors[motor].enabled = TRUE;
-   return ERR_OK;
+   return TANGUITO_OK;
 }
 
 // Detiene el motor y le quita el permiso para andar. 
 error_t motorShufflerDisable( shuffle_motor_t motor )
 {
    if( !motorIsValid( motor ) ) {
-      return ERR_INVALID_ARG;
+      return TANGUITO_INVALID_PARAM;
    }
 
    motorShufflerStop( motor );     // primero se apaga el PWM
    motors[motor].enabled = FALSE;  // y después se quita el permiso
-   return ERR_OK;
+   return TANGUITO_OK;
 }
 
 /* Guarda la velocidad del motor (0-100 %).
@@ -140,7 +140,7 @@ error_t motorShufflerSetSpeed( uint8_t speed, shuffle_motor_t motor )
    // speed no puede pasar de 100 %. Si pasan un valor mayor a eso, en vez de cortar a 
    // 100 sin preguntar, se le avisa al llamador que el argumento era inválido.
    if( !motorIsValid( motor ) || ( speed > MOTOR_SHUFFLER_MAX_SPEED ) ) {
-      return ERR_INVALID_ARG;
+      return TANGUITO_INVALID_PARAM;
    }
 
    motors[motor].speed = speed;
@@ -149,23 +149,23 @@ error_t motorShufflerSetSpeed( uint8_t speed, shuffle_motor_t motor )
       pwmWrite( motors[motor].pin, speedToDuty( speed ) );
    }
 
-   return ERR_OK;
+   return TANGUITO_OK;
 }
 
 // Prende el motor con la velocidad guardada. Requiere que esté habilitado.
 error_t motorShufflerStart( shuffle_motor_t motor )
 {
    if( !motorIsValid( motor ) ) {
-      return ERR_INVALID_ARG;
+      return TANGUITO_INVALID_PARAM;
    }
 
    if( !motors[motor].enabled ) {
-      return ERR_INVALID_STATE;   // el argumento es válido, pero falta Enable
+      return TANGUITO_INVALID_STATE;   // el argumento es válido, pero falta Enable
    }
 
    pwmWrite( motors[motor].pin, speedToDuty( motors[motor].speed ) );
    motors[motor].running = TRUE;
-   return ERR_OK;
+   return TANGUITO_OK;
 }
 
 /* Apaga el motor (PWM en 0). Se puede llamar aunque ya esté apagado
@@ -173,12 +173,12 @@ error_t motorShufflerStart( shuffle_motor_t motor )
 error_t motorShufflerStop( shuffle_motor_t motor )
 {
    if( !motorIsValid( motor ) ) {
-      return ERR_INVALID_ARG;
+      return TANGUITO_INVALID_PARAM;
    }
 
    pwmWrite( motors[motor].pin, 0 );
    motors[motor].running = FALSE;
-   return ERR_OK;
+   return TANGUITO_OK;
 }
 
 //==================[tarea de FreeRTOS]======================================
@@ -231,7 +231,7 @@ error_t shufflerInit( void )
 
    // 1) Hardware: pines, PWM y estado interno. 
    err = motorShufflerInit( NULL );
-   if( err != ERR_OK ) {
+   if( !tanguitoErrorIsOk( err ) ) {
       return err;   // se propaga el error hacia quien llamó
    }
 
@@ -239,13 +239,13 @@ error_t shufflerInit( void )
     * Se chequea cada retorno y se propaga el primer error que aparezca. */
    for( int i = 0; i < SHUFFLE_MOTOR_COUNT; i++ ) {
       err = motorShufflerEnable( (shuffle_motor_t)i );
-      if( err != ERR_OK ) {
-         return err;
-      }
+      if( !tanguitoErrorIsOk( err ) ) {
+         return err;   // se propaga el error hacia quien llamó
+      }      
 
       err = motorShufflerSetSpeed( MOTOR_SHUFFLER_MAX_SPEED, (shuffle_motor_t)i );
-      if( err != ERR_OK ) {
-         return err;
+      if( !tanguitoErrorIsOk( err ) ) {
+         return err;   // se propaga el error hacia quien llamó
       }
    }
 
@@ -257,8 +257,8 @@ error_t shufflerInit( void )
                     NULL,                   // parámetro de la tarea
                     SHUFFLER_TASK_PRIORITY, // prioridad
                     NULL ) != pdPASS ) {    // no necesitamos el handle
-      return ERR_NO_MEM;   // no alcanzó el heap
+      return TANGUITO_NO_MEM;   // no alcanzó el heap
    }
 
-   return ERR_OK;
+   return TANGUITO_OK;
 }

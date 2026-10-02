@@ -56,7 +56,7 @@ error_t motorShufflerStop(shuffle_motor_t motor);
 // Inicializa los motores y crea la tarea del shuffler.
 error_t shufflerInit(void);
 
-// Tarea: prende alternadamente un motor y el otro, con duración aleatoria. Ahora static
+// Tarea: prende alternadamente un motor y el otro, con duración aleatoria. Ahora static, porque es privada al .c
 // void taskShuffler(void* param);
 
 #endif

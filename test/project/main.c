@@ -2,7 +2,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-void mainTask( void* pvParameters )
+void MainTask( void* pvParameters )
 {
    while( TRUE ) {
       gpioToggle(CIAA_BOARD_LED);
@@ -15,10 +15,10 @@ int main( void )
    boardConfig();
 
    xTaskCreate(
-      mainTask,           // Función de la tarea
+      mainTask,           // Funciï¿½n de la tarea
       "mainTask",         // Nombre de la tarea
       configMINIMAL_STACK_SIZE,
-      NULL,               // Parámetros
+      NULL,               // Parï¿½metros
       tskIDLE_PRIORITY + 1,
       NULL                // Handle
    );

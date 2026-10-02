@@ -420,7 +420,7 @@ bool_t turnDegrees ( float Degrees){
    uint32_t steps;
    stepperDirection_t dir;
 
-   if( !stepper.attached || stepper.moving ) {
+   if( stepper.moving ) {
       return FALSE;
    }
 

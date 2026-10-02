@@ -204,8 +204,8 @@ static void taskShuffler( void* param )
       /* Duración del turno: valor entre SHUFFLER_MIN_CANT y
        * SHUFFLER_MAX_CANT, ambos incluidos.
        * rand() % 2001 da un número de 0 a 2000, y se le suma 1000. */
-      uint32_t durationMs = SHUFFLER_MIN_CANT +
-                            ( rand() % ( SHUFFLER_MAX_CANT - SHUFFLER_MIN_CANT + 1 ) );
+      uint32_t durationMs = (SHUFFLER_MIN_CANT +
+                            ( rand() % ( SHUFFLER_MAX_CANT - SHUFFLER_MIN_CANT + 1 ) ))*1000;
 
       /* Primero se apaga el que descansa y después se prende el activo,
        * así nunca hay dos motores prendidos a la vez.

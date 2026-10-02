@@ -1,6 +1,8 @@
 #include "sapi.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "components/motor/inc/shuffler.h"
+#include "components/error/inc/tanguito_error.h"
 
 void mainTask( void* pvParameters )
 {
@@ -13,6 +15,13 @@ void mainTask( void* pvParameters )
 int main( void )
 {
    boardConfig();
+   
+   // hacemos el init del shuffler, pero más fachero porque pregunta por errores
+   error_t err = shufflerInit();
+   if( !tanguitoErrorIsOk( err ) ) {
+      gpioWrite( LEDR, ON );   // señalizamos el fallo
+      while( TRUE );           // no arrancamos el scheduler
+   }  
 
    xTaskCreate(
       mainTask,           // Función de la tarea
@@ -24,7 +33,6 @@ int main( void )
    );
 
    vTaskStartScheduler();
-
 
    while( TRUE );
    return 0;

@@ -16,6 +16,15 @@
 #define CONFIGURATION_START   (1 << 6)
 #define CONFIGURATION_DONE    (1 << 7)
 
+#define PRESSED_ENTER         (1 << 0)
+#define PRESSED_UP            (1 << 1)
+#define PRESSED_DOWN          (1 << 2)
+#define PRESSED_BACK          (1 << 3)
+#define PRESSED_BUTTON        (PRESSED_ENTER | PRESSED_UP | PRESSED_DOWN | PRESSED_BACK)
+
 
 EventGroupHandle_t getMainEventGroup();
+EventGroupHandle_t getButtonEventGroup();
+uint8_t isEvent(EventBits_t);
+void eventInit();
 #endif

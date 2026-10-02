@@ -4,38 +4,35 @@
 #include "sapi.h"
 
 //Podríamos renombrarlos por su uso, por ejemplo BUTTON_START para el start.
-#define BUTTON1 TEC1
-#define BUTTON2 TEC2
-#define BUTTON3 TEC3
-#define BUTTON4 TEC4
+#define BUTTON_ENTER TEC1
+#define BUTTON_UP    TEC2
+#define BUTTON_DOWN  TEC3
+#define BUTTON_BACK  TEC4
 //Input Pull-Up
 #define BUTTON_LOGIC BUTTON_ONE_IS_UP
 
-extern int flagButton1Pressed;
-extern int flagButton2Pressed;
-extern int flagButton3Pressed;
-extern int flagButton4Pressed;
-
 void buttonsInit(void* param);
 
-// Prototipos boton 1
-void button1PressedCallback(void* param);
-void button1ReleasedCallback(void* param);
-void button1HoldPressedCallback(void* param);
+// Prototipos BUTTON_ENTER (TEC1)
+void buttonEnterPressedCallback(void* param);
+void buttonEnterReleasedCallback(void* param);
+void buttonEnterHoldPressedCallback(void* param);
 
-// Prototipos boton 2
-void button2PressedCallback(void* param);
-void button2ReleasedCallback(void* param);
-void button2HoldPressedCallback(void* param);
+// Prototipos BUTTON_UP (TEC2)
+void buttonUpPressedCallback(void* param);
+void buttonUpReleasedCallback(void* param);
+void buttonUpHoldPressedCallback(void* param);
 
-// Prototipos boton 3
-void button3PressedCallback(void* param);
-void button3ReleasedCallback(void* param);
-void button3HoldPressedCallback(void* param);
+// Prototipos BUTTON_DOWN (TEC3)
+void buttonDownPressedCallback(void* param);
+void buttonDownReleasedCallback(void* param);
+void buttonDownHoldPressedCallback(void* param);
 
-// Prototipos boton 4
-void button4PressedCallback(void* param);
-void button4ReleasedCallback(void* param);
-void button4HoldPressedCallback(void* param);
+// Prototipos BUTTON_BACK (TEC4)
+void buttonBackPressedCallback(void* param);
+void buttonBackReleasedCallback(void* param);
+void buttonBackHoldPressedCallback(void* param);
+
+void buttonsInit();
 
 #endif

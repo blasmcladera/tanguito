@@ -1,9 +1,11 @@
 #include "sapi.h"
 #include "FreeRTOS.h"
 #include "task.h"
+
+#include "button.h"
 #include "event.h"
 
-void mainTask( void* pvParameters )
+void MainTask( void* pvParameters )
 {
    /*
    while( TRUE ) {
@@ -25,6 +27,9 @@ void mainTask( void* pvParameters )
 int main( void )
 {
    boardConfig();
+
+   buttonsInit();
+   eventInit();
 
    xTaskCreate(
       mainTask,           // Función de la tarea

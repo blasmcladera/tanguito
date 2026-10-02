@@ -418,7 +418,6 @@ bool_t turnDegrees ( float Degrees){
    float stepsF;
    int32_t stepsRounded;
    uint32_t steps;
-   stepperDirection_t dir;
 
    if( stepper.moving ) {
       return FALSE;
@@ -437,14 +436,14 @@ bool_t turnDegrees ( float Degrees){
    }
 
    if( stepsRounded < 0 ) {
-      stepper.dir = STEPPER_DIRECTION_REVERSE;
+      stepper.dirPin = STEPPER_DIRECTION_REVERSE;
       steps = (uint32_t)(-stepsRounded);
    } else {
-      stepper.dir = STEPPER_DIRECTION_FORWARD;
+      stepper.dirPin = STEPPER_DIRECTION_FORWARD;
       steps = (uint32_t)stepsRounded;
    }
 
-   if( !stepperSetDirection( stepper.dir ) ) {
+   if( !stepperSetDirection( stepper.dirPin ) ) {
       return FALSE;
    }
 

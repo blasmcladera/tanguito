@@ -15,8 +15,8 @@ int main( void )
    boardConfig();
 
    xTaskCreate(
-      mainTask,           // Funci�n de la tarea
-      "mainTask",         // Nombre de la tarea
+      MainTask,           // Funci�n de la tarea
+      "MainTask",         // Nombre de la tarea
       configMINIMAL_STACK_SIZE,
       NULL,               // Par�metros
       tskIDLE_PRIORITY + 1,

@@ -1,21 +1,7 @@
-#include <stdlib.h>
 #include "sapi.h"
 #include "FreeRTOS.h"
 #include "task.h"
-
-#define ENA      PWM0   // T_FIL1, enable del motor A
-#define ENB      PWM3   // T_FIL2, enable del motor B
- 
-#define IN1      GPIO0  // siempre en 1
-#define IN2      GPIO1  // o tmb conectado a GND
-#define IN3      GPIO2  // ídem
-#define IN4      GPIO3  // siempre en 1
- 
-#define VEL_MAX  255    // 100%, prendidos a máxima potencia
-#define VEL_OFF  0      // 0%, apagados
- 
-#define T_MIN_MS 1000   // duración mínima de cada turno de los motores 
-#define T_MAX_MS 3000   // duración máxima de cada turno
+#include "shuffler.h"
 
 void mainTask( void* pvParameters )
 {
@@ -29,7 +15,12 @@ int main( void )
 {
    boardConfig();
    
-   shufflerInit();
+   // hacemos el init del shuffler, pero más fachero porque pregunta por errores
+   if( shufflerInit() != ERR_OK ) {
+      // Falló la inicialización: señalizamos y no arrancamos el scheduler
+      gpioWrite( LEDR, ON );  // damos algún tipo de señal de que hubo error
+      while( TRUE );          // nos quedamos acá y no seguimos ejecutando
+   }
    
    xTaskCreate(
       mainTask,           // Función de la tarea

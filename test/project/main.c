@@ -32,8 +32,8 @@ int main( void )
    eventInit();
 
    xTaskCreate(
-      mainTask,           // Función de la tarea
-      "mainTask",         // Nombre de la tarea
+      MainTask,           // Función de la tarea
+      "MainTask",         // Nombre de la tarea
       configMINIMAL_STACK_SIZE,
       NULL,               // Parámetros
       tskIDLE_PRIORITY + 1,

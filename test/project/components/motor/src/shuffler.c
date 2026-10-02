@@ -5,10 +5,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-static void ShufflerTask(void * params){
+void ShufflerTask(void * params){
    while(1){
       xEventGroupWaitBits(getMainEventGroup(),SHUFFLE_START, pdTRUE, pdTRUE, portMAX_DELAY);
-      while ( TRUE ) {//aca habria que ver si usar un contador o un timer ni idea
+      while ( 1 ) {//aca habria que ver si usar un contador o un timer ni idea
          //random(izq o der)
          //prender()
          vTaskDelay(pdMS_TO_TICKS(2));//tiempo suficiente para que caiga la carta

@@ -91,7 +91,7 @@ void ButtonTask(void *pvParameters) {
     }
 }
 
-void buttonsInit(void* param){
+void buttonsInit(){
     buttonInit( &buttonEnter,                 // Button structure (object)
         BUTTON_ENTER, BUTTON_LOGIC,      // Pin and electrical connection
         50,                                // Button scan time [ms]

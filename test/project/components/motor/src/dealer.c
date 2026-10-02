@@ -7,7 +7,7 @@
 
 void DealerTask(void * params){
 
-   while (TRUE){
+   while (1){
       
       xEventGroupWaitBits(getMainEventGroup(),EJECT_START, pdTRUE, pdTRUE, portMAX_DELAY);
       //prender()

@@ -11,7 +11,7 @@
 //Input Pull-Up
 #define BUTTON_LOGIC BUTTON_ONE_IS_UP
 
-void buttonsInit(void* param);
+void buttonsInit();
 
 // Prototipos BUTTON_ENTER (TEC1)
 void buttonEnterPressedCallback(void* param);

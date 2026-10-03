@@ -1,7 +1,7 @@
 #include "sapi.h"
 #include "FreeRTOS.h"
 #include "task.h"
-
+#include "lcd.h"
 #include "button.h"
 #include "event.h"
 
@@ -30,7 +30,9 @@ int main( void )
 
    buttonsInit();
    eventInit();
-
+   i2cLcdInit();                      // inicia I2C0 y crea la tarea del LCD
+   i2cLcdPrintLine(0, "Hola mundo");
+   
    xTaskCreate(
       MainTask,           // Función de la tarea
       "MainTask",         // Nombre de la tarea

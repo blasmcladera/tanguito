@@ -2,11 +2,12 @@
 #include "configuration.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "display.h"
 #include <stdint.h>
 
 static config_t config; 
 
-void update(uint8_t event){
+static void update(uint8_t event){
    switch (config.actual){
       case SELECTING:
          switch(event){
@@ -55,10 +56,12 @@ void ConfigurationTask(void * params){
    
 while (1){
    xEventGroupWaitBits(getMainEventGroup(),CONFIGURATION_START, pdTRUE, pdTRUE, portMAX_DELAY);
+   updateDisplay(&config);   // muestra el menu (y corta el spinner de la vuelta anterior)
    do {
       EventBits_t event_bits = xEventGroupWaitBits(getButtonEventGroup(),PRESSED_BUTTON, pdFALSE, pdFALSE, portMAX_DELAY);
       uint8_t event = isEventAndClear(event_bits);
       update(event);
+      updateDisplay(&config);   // si el estado paso a START, arranca el spinner
    } while (config.actual != START);
    config.actual = SELECTING;
    config.selected= SELECT_PLAYERS;
@@ -78,11 +81,13 @@ void configInit(){
     .cards_aux = 0
    };
    
+   displayInit();   // LCD + tarea de la vista
+
    xTaskCreate(
-      ConfigurationTask,           // Función de la tarea
+      ConfigurationTask,           // Funci?n de la tarea
       "ConfigurationTask",         // Nombre de la tarea
       configMINIMAL_STACK_SIZE,
-      NULL,               // Parámetros
+      NULL,               // Par?metros
       tskIDLE_PRIORITY + 1,
       NULL                // Handle
    );

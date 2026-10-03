@@ -1,6 +1,8 @@
 #ifndef _CONFIGURATION_H_
 #define _CONFIGURATION_H_
 
+#include <stdint.h>
+
 typedef enum {
    SELECT_PLAYERS,
    SELECT_CARDS,
@@ -18,6 +20,8 @@ typedef struct {
    uint8_t cards;
    uint8_t cards_aux;
 } config_t;
+
+void configInit(void);
 
 
 

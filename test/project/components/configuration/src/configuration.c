@@ -20,7 +20,6 @@ static void update(uint8_t event){
          switch(event){
             case PRESSED_ENTER:  
                config.players = config.players_aux;
-               config.players_aux = 0;
                config.actual = SELECTING;
                break;
             case PRESSED_UP:     config.players_aux++; break;
@@ -32,10 +31,10 @@ static void update(uint8_t event){
             default: break;
          } break;
       case SELECT_CARDS:
+         //HACERLO 360 agregarlo a objetivos, GANTT actalizado, DIVISION DE TAREAS
          switch(event){
             case PRESSED_ENTER:  
                config.cards = config.cards_aux;
-               config.cards_aux = 0;
                config.actual = SELECTING;
                break;
             case PRESSED_UP:     config.cards_aux++; break;

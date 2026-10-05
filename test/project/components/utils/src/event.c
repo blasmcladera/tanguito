@@ -16,7 +16,7 @@ void eventInit(){
    
 }
 
-uint8_t isEvent(EventBits_t event){
+uint8_t isEventAndClear(EventBits_t event){
    if ((event & PRESSED_ENTER) != 0) {
       xEventGroupClearBits(buttonEventGroup,PRESSED_ENTER);
       return PRESSED_ENTER;

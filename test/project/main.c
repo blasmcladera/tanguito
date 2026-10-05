@@ -4,6 +4,7 @@
 #include "lcd.h"
 #include "button.h"
 #include "event.h"
+#include "configuration.h"
 
 void MainTask( void* pvParameters )
 {
@@ -31,7 +32,7 @@ int main( void )
    buttonsInit();
    eventInit();
    i2cLcdInit();                      // inicia I2C0 y crea la tarea del LCD
-   i2cLcdPrintLine(0, "Hola mundo");
+   configInit();
    
    xTaskCreate(
       MainTask,           // Función de la tarea

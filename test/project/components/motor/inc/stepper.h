@@ -2,7 +2,7 @@
  * stepper.h
  *
  * Driver para un motor paso a paso bipolar controlado mediante un A4988
- * utilizando la EDU-CIAA-NXP y la sAPI.
+ * utilizando la EDU-CIAA-NXP, la sAPI y FreeRTOS.
  *
  * El A4988 se encarga internamente de:
  *   - secuenciar las corrientes de las dos fases,
@@ -13,6 +13,26 @@
  *   - habilitar/deshabilitar el driver mediante ENABLE,
  *   - seleccionar el sentido mediante DIR,
  *   - generar los pulsos de STEP.
+ *
+ * REPARTO DE TAREAS CON FreeRTOS
+ *
+ * Los flancos de STEP se generan dentro de las interrupciones del timer
+ * (Compare Match 0 -> flanco ascendente, Compare Match 1 -> flanco
+ * descendente). No se generan desde una task porque el tiempo que tarda
+ * FreeRTOS en despertar una task (cambio de contexto + planificador) no
+ * esta acotado y puede superar facilmente los 2 us de HIGH/LOW que se
+ * utilizan aqui.
+ *
+ * Una task propia del modulo (creada en stepperInit()) es la duena del
+ * timer: es la unica que ejecuta Timer_Init() y Timer_DeInit(). La task
+ * duerme esperando notificaciones y se despierta:
+ *   - cuando stepperMove() acepta un movimiento (arma el timer),
+ *   - cuando el movimiento termina o es cancelado por stepperStop()
+ *     (libera el timer).
+ *
+ * Las funciones publicas estan pensadas para ser llamadas desde otras
+ * tasks (por ejemplo rotator.c) una vez iniciado el scheduler. Ninguna
+ * debe llamarse desde una interrupcion.
  */
 
 #ifndef _STEPPER_H_
@@ -22,6 +42,9 @@
 
 #include "sapi_datatypes.h"
 #include "sapi_peripheral_map.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
 
 /*==================[c++]====================================================*/
 #ifdef __cplusplus
@@ -43,6 +66,32 @@ extern "C" {
  *
  * MS1, MS2 y MS3 tampoco son controlados por software en este modulo. Su
  * estado se fija por hardware segun el microstepping deseado.
+ *
+ * PINES FIJOS (VCC / GND)
+ *
+ * Cualquiera de los tres pines puede definirse como VCC o GND cuando esa
+ * entrada del A4988 esta cableada directamente a la alimentacion o a masa
+ * en lugar de a un GPIO de la EDU-CIAA. Por ejemplo:
+ *
+ *       #define STEPPER_ENABLE_PIN   GND    (driver siempre habilitado)
+ *       #define STEPPER_DIR_PIN      GND    (sentido siempre FORWARD)
+ *
+ * La sAPI devuelve FALSE tanto en gpioConfig() como en gpioWrite() cuando
+ * el pin es VCC o GND, y ese FALSE no se distingue de un error real. Por
+ * eso este modulo detecta en tiempo de compilacion si un pin es fijo y, en
+ * ese caso, directamente no llama a gpioConfig()/gpioWrite() sobre el.
+ * Asi, un FALSE de la sAPI sobre un GPIO real siempre es un error.
+ *
+ * Que ocurre con cada pin fijo:
+ *   - STEP fijo   : no hay forma de generar pulsos, el motor no se movera
+ *                   (se emite un #warning).
+ *   - DIR fijo    : GND implica FORWARD y VCC implica REVERSE.
+ *                   stepperSetDirection() devuelve TRUE si se pide el
+ *                   sentido que el cableado ya impone y FALSE si se pide
+ *                   el contrario.
+ *   - ENABLE fijo : GND implica driver siempre habilitado y VCC siempre
+ *                   deshabilitado (se emite un #warning).
+ *                   Ver stepperEnable() y stepperDisable().
  */
 #ifndef STEPPER_STEP_PIN
 #define STEPPER_STEP_PIN      GPIO2
@@ -73,7 +122,104 @@ extern "C" {
  * pulso HIGH de STEP.
  */
 #ifndef STEPPER_TIMER
-#define STEPPER_TIMER         TIMER1
+#define STEPPER_TIMER         TIMER0
+#endif
+
+/*==================[deteccion de pines fijos VCC / GND]=====================*/
+
+/*
+ * VCC y GND son constantes de un enum (gpioMap_t), por lo que el
+ * preprocesador no puede compararlas directamente. Para detectarlas se
+ * pega el nombre del pin a un prefijo:
+ *
+ *       STEPPER_PINKIND( VCC )   ->  STEPPER_PINKIND_VCC   ->  1
+ *       STEPPER_PINKIND( GND )   ->  STEPPER_PINKIND_GND   ->  2
+ *       STEPPER_PINKIND( GPIO2 ) ->  STEPPER_PINKIND_GPIO2 ->  (no definido)
+ *
+ * Un identificador no definido vale 0 dentro de un #if, de modo que
+ * cualquier pin que no sea VCC ni GND queda como pin comun.
+ *
+ * La doble indireccion (STEPPER_CAT -> STEPPER_CAT_) es necesaria para que
+ * STEPPER_xxx_PIN se expanda antes de realizar el pegado.
+ */
+#define STEPPER_PINKIND_VCC      1
+#define STEPPER_PINKIND_GND      2
+
+#define STEPPER_CAT_( a, b )     a##b
+#define STEPPER_CAT( a, b )      STEPPER_CAT_( a, b )
+#define STEPPER_PINKIND( pin )   STEPPER_CAT( STEPPER_PINKIND_, pin )
+
+/*
+ * Resultado de la deteccion, para cada pin:
+ *
+ *   STEPPER_xxx_FIXED        1 si el pin esta cableado a VCC o GND, 0 si es
+ *                            un GPIO comun.
+ *   STEPPER_xxx_FIXED_LEVEL  nivel logico fijo del pin (TRUE = VCC,
+ *                            FALSE = GND). Solo existe si FIXED es 1.
+ */
+#if   ( STEPPER_PINKIND( STEPPER_STEP_PIN ) == STEPPER_PINKIND_VCC )
+   #define STEPPER_STEP_FIXED         1
+   #define STEPPER_STEP_FIXED_LEVEL   TRUE
+#elif ( STEPPER_PINKIND( STEPPER_STEP_PIN ) == STEPPER_PINKIND_GND )
+   #define STEPPER_STEP_FIXED         1
+   #define STEPPER_STEP_FIXED_LEVEL   FALSE
+#else
+   #define STEPPER_STEP_FIXED         0
+#endif
+
+#if   ( STEPPER_PINKIND( STEPPER_DIR_PIN ) == STEPPER_PINKIND_VCC )
+   #define STEPPER_DIR_FIXED          1
+   #define STEPPER_DIR_FIXED_LEVEL    TRUE
+#elif ( STEPPER_PINKIND( STEPPER_DIR_PIN ) == STEPPER_PINKIND_GND )
+   #define STEPPER_DIR_FIXED          1
+   #define STEPPER_DIR_FIXED_LEVEL    FALSE
+#else
+   #define STEPPER_DIR_FIXED          0
+#endif
+
+#if   ( STEPPER_PINKIND( STEPPER_ENABLE_PIN ) == STEPPER_PINKIND_VCC )
+   #define STEPPER_ENABLE_FIXED       1
+   #define STEPPER_ENABLE_FIXED_LEVEL TRUE
+#elif ( STEPPER_PINKIND( STEPPER_ENABLE_PIN ) == STEPPER_PINKIND_GND )
+   #define STEPPER_ENABLE_FIXED       1
+   #define STEPPER_ENABLE_FIXED_LEVEL FALSE
+#else
+   #define STEPPER_ENABLE_FIXED       0
+#endif
+
+#if STEPPER_STEP_FIXED
+   #warning "STEPPER_STEP_PIN es VCC o GND: no se generaran pulsos STEP"
+#endif
+
+#if STEPPER_ENABLE_FIXED && ( STEPPER_ENABLE_FIXED_LEVEL == 1 )
+   #warning "STEPPER_ENABLE_PIN es VCC: el A4988 queda deshabilitado (ENABLE es activo en LOW)"
+#endif
+
+/*==================[configuracion de la task]===============================*/
+
+/*
+ * Prioridad y stack de la task interna del stepper.
+ *
+ * La task solo arma y libera el timer, por lo que consume poco CPU. Conviene
+ * que su prioridad sea MAYOR que la de las tasks que llaman a stepperMove()
+ * y stepperStop(): asi el arranque y la liberacion del timer ocurren apenas
+ * se la notifica y stepperStop() retorna con el timer ya liberado.
+ */
+#ifndef STEPPER_TASK_PRIORITY
+#define STEPPER_TASK_PRIORITY     ( tskIDLE_PRIORITY + 3 )
+#endif
+
+#ifndef STEPPER_TASK_STACK_SIZE
+#define STEPPER_TASK_STACK_SIZE   ( configMINIMAL_STACK_SIZE * 2 )
+#endif
+
+/*
+ * Tiempo maximo, en milisegundos, que stepperStop() espera a que la task
+ * termine de liberar el timer cuando esta tiene menor prioridad que quien
+ * llama.
+ */
+#ifndef STEPPER_STOP_TIMEOUT_MS
+#define STEPPER_STOP_TIMEOUT_MS   100
 #endif
 
 /*==================[temporizacion del STEP]=================================*/
@@ -104,6 +250,27 @@ typedef enum {
 } stepperDirection_t;
 
 /*
+ * Estados del movimiento. Las transiciones validas son:
+ *
+ *       IDLE --stepperMove()--> STARTING --task arma el timer--> RUNNING
+ *       RUNNING --ultimo pulso o stepperStop()--> ENDING
+ *       STARTING --stepperStop()--> ENDING
+ *       ENDING --task libera el timer--> IDLE
+ *
+ *   IDLE     : sin movimiento y con el timer liberado.
+ *   STARTING : stepperMove() acepto el movimiento; la task todavia no
+ *              termino de armar el timer (no se genera ningun pulso).
+ *   RUNNING  : el timer esta armado y las interrupciones generan pulsos.
+ *   ENDING   : no se generan mas pulsos; falta que la task libere el timer.
+ */
+typedef enum {
+   STEPPER_STATE_IDLE = 0,
+   STEPPER_STATE_STARTING,
+   STEPPER_STATE_RUNNING,
+   STEPPER_STATE_ENDING
+} stepperState_t;
+
+/*
  * Estado interno del driver.
  *
  * Se agrupan en una sola estructura todas las variables que pertenecen al
@@ -113,6 +280,10 @@ typedef enum {
  * La estructura deja agrupado el estado y facilita una futura extension a
  * varias instancias sin volver a repartir las variables globales entre
  * distintas partes del archivo.
+ *
+ * Los campos que comparten las tasks y las interrupciones del timer
+ * (state y remainingSteps) son volatile. Las tasks los modifican siempre
+ * dentro de una seccion critica de FreeRTOS.
  */
 typedef struct {
    /* Pines fisicos utilizados por el driver. */
@@ -126,11 +297,14 @@ typedef struct {
    /* Cantidad de pulsos que aun falta generar en el movimiento actual. */
    volatile uint32_t remainingSteps;
 
-   /* TRUE mientras existe un movimiento en curso. */
-   volatile bool_t moving;
+   /* Estado del movimiento actual (ver stepperState_t). */
+   volatile stepperState_t state;
 
    /* Velocidad configurada en pulsos STEP por segundo. */
    uint32_t stepsPerSecond;
+
+   /* Periodo de STEP, en us, congelado al aceptar el movimiento. */
+   uint32_t periodUs;
 
    /* Sentido actualmente configurado. */
    stepperDirection_t direction;
@@ -141,16 +315,25 @@ typedef struct {
    /* Estado logico del pin ENABLE: TRUE si el driver esta habilitado. */
    bool_t enabled;
 
+   /* Task interna que arma y libera el timer. */
+   TaskHandle_t taskHandle;
+
 } stepper_t;
 
 /*==================[funciones publicas]=====================================*/
 
 /*
- * Inicializa STEP, DIR y ENABLE como salidas digitales y establece el
- * estado inicial del driver.
+ * Inicializa STEP, DIR y ENABLE como salidas digitales, establece el
+ * estado inicial del driver y crea la task interna del modulo.
+ *
+ * Puede llamarse antes de vTaskStartScheduler(). Los pines definidos como
+ * VCC o GND no se configuran (ver "PINES FIJOS"); eso no es un error.
+ * Retorna FALSE si falla la configuracion de algun GPIO real, si no se
+ * pudo crear la task o si hay un movimiento en curso.
  *
  * La inicializacion deja el driver HABILITADO, por lo que no es necesario
- * llamar a stepperEnable() inmediatamente despues de stepperInit().
+ * llamar a stepperEnable() inmediatamente despues de stepperInit(). La unica
+ * excepcion es ENABLE cableado a VCC, que lo deja deshabilitado.
  *
  * El movimiento aun no comienza durante la inicializacion.
  */
@@ -159,12 +342,20 @@ bool_t stepperInit( void );
 /*
  * Habilita fisicamente las salidas del A4988.
  * ENABLE es activo en LOW, por lo que esta funcion escribe LOW en ese pin.
+ *
+ * Con ENABLE fijo en GND retorna TRUE sin escribir nada (ya esta
+ * habilitado). Con ENABLE fijo en VCC retorna FALSE porque el cableado
+ * impide habilitar el driver.
  */
 bool_t stepperEnable( void );
 
 /*
  * Detiene cualquier movimiento en curso y deshabilita las salidas del
  * A4988. ENABLE queda en HIGH.
+ *
+ * Con ENABLE fijo en VCC retorna TRUE (ya estaba deshabilitado). Con ENABLE
+ * fijo en GND el movimiento se detiene pero el driver no puede
+ * deshabilitarse, por lo que retorna FALSE.
  */
 bool_t stepperDisable( void );
 
@@ -173,6 +364,9 @@ bool_t stepperDisable( void );
  *
  * No se permite cambiar DIR mientras un movimiento esta en curso, porque
  * el A4988 toma el sentido en el siguiente flanco ascendente de STEP.
+ *
+ * Con DIR fijo solo se acepta el sentido que impone el cableado
+ * (GND -> FORWARD, VCC -> REVERSE).
  */
 bool_t stepperSetDirection( stepperDirection_t direction );
 
@@ -199,14 +393,23 @@ bool_t stepperSetSpeed( uint32_t stepsPerSecond );
  *   - No habilita automaticamente el A4988.
  *   - Si el driver no esta habilitado, la funcion retorna FALSE.
  *   - Si ya existe un movimiento en curso, retorna FALSE.
+ *   - Requiere el scheduler en marcha: el timer lo arma la task interna.
  *
- * La funcion solamente programa el timer y retorna; los pulsos son
- * generados posteriormente desde las interrupciones del timer.
+ * La funcion solamente acepta el movimiento y notifica a la task; el timer
+ * lo arma la task y los pulsos son generados posteriormente desde las
+ * interrupciones del timer. Cuando retorna TRUE, stepperIsBusy() ya
+ * devuelve TRUE.
  */
 bool_t stepperMove( uint32_t steps );
 
 /*
- * Detiene el movimiento actual, coloca STEP en LOW y libera el timer.
+ * Detiene el movimiento actual, coloca STEP en LOW y libera el timer, de
+ * modo que dejan de producirse interrupciones.
+ *
+ * Puede llamarse en cualquier momento desde una task: sin movimiento no
+ * hace nada, y durante un movimiento corta el tren de pulsos
+ * inmediatamente. Retorna una vez que la task libero el timer (o pasados
+ * STEPPER_STOP_TIMEOUT_MS ms si la task no llego a ejecutarse).
  *
  * La funcion NO deshabilita el A4988. Para deshabilitar el driver tambien
  * debe utilizarse stepperDisable().
@@ -215,27 +418,9 @@ void stepperStop( void );
 
 /*
  * Retorna TRUE mientras exista un movimiento en curso y FALSE cuando no
- * quedan pulsos por generar.
+ * quedan pulsos por generar y el timer ya fue liberado.
  */
 bool_t stepperIsBusy( void );
-
-/* Convierte la cantidad de grados en Steps que hace el suffler suponiendo que cada steps es 1,8 Grados*/
-bool_t turn_Degrees( float Degrees);
-
-/*==================[callbacks internos expuestos a sAPI Timer]=============*/
-
-/*
- * Compare Match 0:
- * genera el flanco ascendente de STEP y consume un pulso del movimiento.
- */
-void stepperTimerCompareMatch0func( void* ptr );
-
-/*
- * Compare Match 1:
- * genera el flanco descendente de STEP y, si fue el ultimo pulso, termina
- * el movimiento y libera el timer.
- */
-void stepperTimerCompareMatch1func( void* ptr );
 
 /*==================[c++]====================================================*/
 #ifdef __cplusplus

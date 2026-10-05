@@ -22,7 +22,7 @@
 #include "sapi.h"       // gpioInit, gpioWrite, pwmInit, pwmWrite
 #include "FreeRTOS.h"   // tipos y configuración de FreeRTOS
 #include "task.h"       // xTaskCreate, vTaskDelay, xTaskGetTickCount
-
+#include  "event.h"
 #include "shuffler.h"   // declaraciones públicas de este módulo
 
 //==================[constantes internas]========================================
@@ -104,7 +104,6 @@ error_t motorShufflerInit( void* param )
       motors[i].running = FALSE;
       pwmWrite( motors[i].pin, 0 );   // PWM en 0 = motor apagado
    }
-
    attached = TRUE;   // a partir de acá el resto de las funciones funcionan
    return TANGUITO_OK;
 }
@@ -219,6 +218,45 @@ static void taskShuffler( void* param )
       vTaskDelay( pdMS_TO_TICKS( durationMs ) );
 
       active = idle;   // el próximo turno le toca al otro motor
+   }
+}
+
+void ShufflerTask(void * params){
+   while(1){
+      xEventGroupWaitBits(getMainEventGroup(),SHUFFLE_START, pdTRUE, pdTRUE, portMAX_DELAY);
+      shuffle_motor_t active = SHUFFLE_LEFT;   // motor que arranca prendido
+
+      (void)params;   // la tarea no recibe parámetros
+
+      /* Semilla del generador de números aleatorios. Por ahora no es aleatorio porque el tick
+       * cuando arranca la función es siempre el mismo, la secuencia entonces sería la misma.
+       * Eventualmente se debería hacer random en serio con una entrada del ADC que tenga ruido */
+      srand( xTaskGetTickCount() );
+      //Esto deberia ser hasta que se haya mezclado todo, ni idea cuanto
+      while( TRUE ) {
+         // El motor "idle" es el que descansa en este turno. 
+         shuffle_motor_t idle = ( active == SHUFFLE_LEFT ) ? SHUFFLE_RIGHT : SHUFFLE_LEFT;
+
+         /* Duración del turno: valor entre SHUFFLER_MIN_CANT y
+          * SHUFFLER_MAX_CANT, ambos incluidos.
+          * rand() % 2001 da un número de 0 a 2000, y se le suma 1000. */
+         uint32_t durationMs = (SHUFFLER_MIN_CANT +
+                               ( rand() % ( SHUFFLER_MAX_CANT - SHUFFLER_MIN_CANT + 1 ) ))*1000;
+
+         /* Primero se apaga el que descansa y después se prende el activo,
+          * así nunca hay dos motores prendidos a la vez.
+          * Los códigos de retorno se ignoran: la tarea no tiene a quién
+          * reportar un error, y si shufflerInit() salió bien no deberían fallar. */
+         motorShufflerStop( idle );
+         motorShufflerStart( active );
+
+         /* Se bloquea la tarea (no la CPU) mientras dura el turno.
+          * Otras tareas, como el parpadeo del LED, siguen corriendo. */
+         vTaskDelay( pdMS_TO_TICKS( durationMs ) );
+
+         active = idle;   // el próximo turno le toca al otro motor
+      }
+      xEventGroupSetBits(getMainEventGroup(), SHUFFLE_DONE);
    }
 }
 

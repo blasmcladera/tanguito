@@ -16,6 +16,7 @@
 #include "sapi_gpio.h"
 #include "stepper.h"
 #include "sapi_timer.h"
+#include "event.h"
 
 /*==================[estado interno]=========================================*/
 
@@ -94,6 +95,22 @@ void stepperTimerCompareMatch1func( void* ptr )
 }
 
 /*==================[funciones publicas]====================================*/
+
+void StepperTask(void * params){
+   
+   while ( TRUE ){
+      xEventGroupWaitBits(getMainEventGroup(), DEAL_START, pdTRUE, pdTRUE, portMAX_DELAY);
+      while ( TRUE ){ //Este while es hasta que se hayan repartido todas las cartas, de momento ni idea donde se calcula eso
+         //rotarLoNecesario() ----> lo piensa mucci, él sabe que tiene que hacer
+         //LO UNICO IMPORTANTE ES QUE VUELVA SOLO CUANDO SE HAYA TERMINADO DE ROTAR A ESA POSICION
+         xEventGroupSetBits(getMainEventGroup(),EJECT_START);
+         xEventGroupWaitBits(getMainEventGroup(),EJECT_DONE, pdTRUE, pdTRUE, portMAX_DELAY);
+      }
+      //rotarAlCentro()
+      xEventGroupSetBits(getMainEventGroup(), DEAL_DONE);
+   }
+
+}
 
 bool_t stepperInit( void )
 {

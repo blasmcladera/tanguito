@@ -1,19 +1,23 @@
 #include "sapi.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "stepper.h"
 
 void MainTask( void* pvParameters )
 {
+   stepperSetSpeed(1500);
    while( TRUE ) {
-      gpioToggle(CIAA_BOARD_LED);
-      vTaskDelay( pdMS_TO_TICKS( 100 ) );
+      stepperMove(200);
+      //gpioToggle(CIAA_BOARD_LED);
+      //vTaskDelay( pdMS_TO_TICKS( 1000 ) );
    }
 }
 
 int main( void )
 {
    boardConfig();
-
+   stepperInit();
+   
    xTaskCreate(
       MainTask,           // Funci�n de la tarea
       "MainTask",         // Nombre de la tarea

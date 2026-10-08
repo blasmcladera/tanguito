@@ -24,6 +24,12 @@
  *   - La comunicacion hacia la task se hace con notificaciones directas
  *     (xTaskNotify / xTaskNotifyFromISR), que no necesitan ni un objeto
  *     extra ni la task de timers de FreeRTOS.
+ *
+ *   - La velocidad no es constante: cada movimiento sigue un perfil
+ *     trapezoidal (aceleracion, crucero, frenado). El periodo de cada pulso
+ *     se recalcula en la interrupcion del Compare Match 0, justo despues de
+ *     subir STEP, y se carga en el registro de periodo del timer. Ninguna
+ *     de estas cuentas usa funciones de FreeRTOS.
  */
 
 /*==================[inclusions]=============================================*/
@@ -33,11 +39,20 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "chip.h"
+
 #include "sapi_gpio.h"
 #include "sapi_timer.h"
 #include "stepper.h"
 
 /*==================[macros y definiciones]==================================*/
+
+/*
+ * Margen, en ticks del timer, entre el contador actual y el nuevo periodo
+ * cuando la interrupcion modifica el Match 0 (64 ticks = 0,31 us a 204 MHz).
+ * Ver stepperRampUpdate().
+ */
+#define STEPPER_MATCH_GUARD_TICKS   64UL
 
 /* Bits de notificacion que recibe la task. */
 #define STEPPER_NOTIFY_START   ( 1UL << 0 )   /* armar el timer              */
@@ -102,7 +117,14 @@ static stepper_t stepper = {
    /* remainingSteps */ 0,
    /* state          */ STEPPER_STATE_IDLE,
    /* stepsPerSecond */ 1000,
-   /* periodUs       */ 0,
+   /* totalSteps     */ 0,
+   /* accelSteps     */ 0,
+   /* startTicks     */ 0,
+   /* targetTicks    */ 0,
+   /* periodTicks    */ 0,
+   /* rampV0Sq       */ 0.0f,
+   /* rampTwoA       */ 0.0f,
+   /* rampTicksPerSecond */ 0.0f,
    /* direction      */ STEPPER_DIRECTION_FORWARD,
    /* initialized    */ FALSE,
    /* enabled        */ FALSE,
@@ -120,42 +142,120 @@ static bool_t timerOwned = FALSE;
 
 /*
  * Convierte una velocidad expresada en pulsos por segundo a un periodo
- * expresado en microsegundos.
+ * expresado en ticks del timer, redondeando al entero mas cercano.
  *
- * Ademas de realizar la conversion, comprueba que el periodo sea suficiente
- * para respetar los tiempos minimos seleccionados para HIGH y LOW.
+ * Se trabaja en ticks y no en microsegundos porque un microsegundo (204
+ * ticks) es una resolucion demasiado gruesa a velocidades altas: a 250000
+ * pasos/s el periodo es de 4 us y un redondeo de 1 us seria un error del 25%.
+ *
+ * Requiere 1 <= stepsPerSecond <= STEPPER_MAX_SPS. Con ese rango el periodo
+ * obtenido nunca es menor que STEPPER_STEP_HIGH_US + STEPPER_STEP_LOW_US,
+ * que es el periodo minimo valido para esta implementacion.
  */
-static bool_t stepperSpeedToPeriodUs( uint32_t stepsPerSecond,
-                                      uint32_t* periodUs )
+static uint32_t stepperSpsToTicks( uint32_t stepsPerSecond )
 {
-   if( (stepsPerSecond == 0) || (periodUs == NULL) ) {
-      return FALSE;
+   const uint32_t ticksPerSecond = Timer_microsecondsToTicks( 1000000UL );
+
+   return ( ticksPerSecond + ( stepsPerSecond / 2 ) ) / stepsPerSecond;
+}
+
+/*
+ * Devuelve los registros del periferico timer que corresponde a
+ * stepper.timer. Se usa para leer el contador (TC) desde la interrupcion,
+ * lo que la sAPI no ofrece.
+ */
+static LPC_TIMER_T* stepperTimerRegs( void )
+{
+   switch( stepper.timer ) {
+   case TIMER1: return LPC_TIMER1;
+   case TIMER2: return LPC_TIMER2;
+   case TIMER3: return LPC_TIMER3;
+   case TIMER0:
+   default:     return LPC_TIMER0;
+   }
+}
+
+/*
+ * Calcula el periodo del proximo pulso y lo carga en el Compare Match 0.
+ *
+ * Se ejecuta en contexto de interrupcion, justo despues de emitir un pulso
+ * y con al menos un pulso pendiente. 'remaining' es la cantidad de pulsos
+ * que faltan; los ya emitidos son totalSteps - remaining.
+ *
+ * PERFIL
+ *
+ * Con aceleracion constante 'a', la velocidad v despues de recorrer 'e'
+ * pasos desde una velocidad inicial v0 cumple:
+ *
+ *       v^2 = v0^2 + 2 * a * e
+ *
+ * y el periodo del siguiente pulso es T = 1 / v. Aqui 'e' es el numero de
+ * pasos recorridos dentro de la rampa, que se obtiene como el menor entre:
+ *
+ *   - los pulsos ya emitidos          -> rampa de ACELERACION,
+ *   - los pulsos que faltan           -> rampa de FRENADO (simetrica),
+ *   - accelSteps                      -> tope: se llego a la velocidad
+ *                                        de CRUCERO.
+ *
+ * Con un unico 'e' los tres tramos quedan descritos por la misma formula, y
+ * los movimientos cortos (en los que no se llega al crucero) resultan
+ * triangulares sin tratamiento aparte.
+ *
+ * ARITMETICA
+ *
+ * Se usa float (FPU del Cortex-M4F) porque la alternativa entera tendria
+ * que perder precision a velocidades altas: la variacion del periodo entre
+ * pulsos consecutivos es una fraccion de tick. El costo es de decenas de
+ * ciclos (una raiz y una division en la FPU). Esto requiere compilar con
+ * -mfpu=fpv4-sp-d16 y -mfloat-abi=hard, lo mismo que ya exige el port
+ * ARM_CM4F de FreeRTOS, que guarda el contexto de la FPU de forma automatica
+ * y diferida cuando una interrupcion la usa.
+ *
+ * CARGA DEL PERIODO
+ *
+ * El Compare Match 0 reinicia el contador al coincidir (igualdad, no
+ * "mayor o igual"). Si el nuevo valor fuera menor que el contador actual,
+ * el contador deberia dar toda la vuelta (2^32 ticks, unos 21 s) para volver
+ * a coincidir. Por eso el nuevo periodo se lleva, como minimo, a
+ * contador + STEPPER_MATCH_GUARD_TICKS. En condiciones normales el contador
+ * esta cerca de 0 (acaba de reiniciarse) y la guarda no actua.
+ */
+static void stepperRampUpdate( uint32_t remaining )
+{
+   uint32_t e = stepper.totalSteps - remaining;   /* pulsos ya emitidos */
+   uint32_t ticks;
+   uint32_t counter;
+
+   if( remaining < e ) {
+      e = remaining;
    }
 
-   /*
-    * Para una velocidad f de pulsos por segundo:
-    *
-    *       T = 1 / f
-    *
-    * Como el timer trabaja en microsegundos, usamos 1.000.000 us por
-    * segundo y obtenemos el periodo entero en microsegundos.
-    */
-   *periodUs = 1000000UL / stepsPerSecond;
+   if( e >= stepper.accelSteps ) {
+      /* Crucero. Tambien cubre los movimientos sin rampa (accelSteps = 0). */
+      ticks = stepper.targetTicks;
+   } else {
+      float v2 = stepper.rampV0Sq + stepper.rampTwoA * (float)e;
 
-   /*
-    * Cada periodo debe contener como minimo:
-    *
-    *       HIGH = STEPPER_STEP_HIGH_US
-    *       LOW  = STEPPER_STEP_LOW_US
-    *
-    * Se permite exactamente la suma de ambos tiempos, porque ese es el
-    * periodo minimo valido para esta implementacion.
-    */
-   if( *periodUs < (STEPPER_STEP_HIGH_US + STEPPER_STEP_LOW_US) ) {
-      return FALSE;
+      ticks = (uint32_t)( stepper.rampTicksPerSecond / __builtin_sqrtf( v2 ) );
+
+      /* Nunca mas rapido que la velocidad de crucero configurada. */
+      if( ticks < stepper.targetTicks ) {
+         ticks = stepper.targetTicks;
+      }
    }
 
-   return TRUE;
+   /* Durante el crucero el periodo no cambia: se evita escribir el registro. */
+   if( ticks == stepper.periodTicks ) {
+      return;
+   }
+
+   counter = Chip_TIMER_ReadCount( stepperTimerRegs() );
+   if( ticks < ( counter + STEPPER_MATCH_GUARD_TICKS ) ) {
+      ticks = counter + STEPPER_MATCH_GUARD_TICKS;
+   }
+
+   stepper.periodTicks = ticks;
+   Timer_SetCompareMatch( stepper.timer, TIMERCOMPAREMATCH0, ticks );
 }
 
 /*
@@ -185,10 +285,15 @@ static void stepperQuiesceTimer( void )
  * STEP. Ese flanco es interpretado por el A4988 como un nuevo paso o
  * microstep.
  *
+ * Despues del flanco, y con tiempo de sobra antes del Compare Match 1,
+ * calcula el periodo del pulso siguiente (ver stepperRampUpdate()).
+ *
  * Se ejecuta en contexto de interrupcion.
  */
 static void stepperTimerCompareMatch0func( void* ptr )
 {
+   uint32_t remaining;
+
    /* La sAPI no utiliza el argumento del callback en este modulo. */
    (void)ptr;
 
@@ -207,7 +312,16 @@ static void stepperTimerCompareMatch0func( void* ptr )
    (void)STEPPER_STEP_WRITE( TRUE );
 
    /* Este flanco ya representa uno de los pulsos solicitados. */
-   stepper.remainingSteps--;
+   remaining = stepper.remainingSteps - 1;
+   stepper.remainingSteps = remaining;
+
+   /*
+    * Despues del ultimo pulso no hay periodo siguiente que calcular: el
+    * Compare Match 1 se encarga de cerrar el movimiento.
+    */
+   if( remaining != 0 ) {
+      stepperRampUpdate( remaining );
+   }
 }
 
 /*
@@ -271,12 +385,12 @@ static void stepperTimerCompareMatch1func( void* ptr )
  */
 static void stepperTaskStart( void )
 {
-   uint32_t periodUs;
+   uint32_t startTicks;
    bool_t proceed;
 
    taskENTER_CRITICAL();
-   proceed  = ( stepper.state == STEPPER_STATE_STARTING );
-   periodUs = stepper.periodUs;
+   proceed    = ( stepper.state == STEPPER_STATE_STARTING );
+   startTicks = stepper.startTicks;
    taskEXIT_CRITICAL();
 
    if( !proceed ) {
@@ -293,11 +407,13 @@ static void stepperTaskStart( void )
     *       STEP -> HIGH
     *       timer counter -> 0
     *
-    * Por lo tanto, el siguiente periodo vuelve a comenzar despues de
-    * 'periodUs' microsegundos.
+    * Por lo tanto, el primer pulso sale 'startTicks' ticks despues de
+    * Timer_Init(), con el periodo de la velocidad inicial. A partir del
+    * primer pulso, la interrupcion del Match 0 va modificando este periodo
+    * siguiendo el perfil de velocidad (ver stepperRampUpdate()).
     */
    Timer_Init( stepper.timer,
-               Timer_microsecondsToTicks( periodUs ),
+               startTicks,
                stepperTimerCompareMatch0func );
 
    /*
@@ -594,28 +710,31 @@ bool_t stepperSetDirection( stepperDirection_t direction )
 }
 
 /*
- * Configura la velocidad de movimiento.
+ * Configura la velocidad maxima (de crucero) del movimiento.
  *
- * La velocidad se almacena como frecuencia de pasos y el periodo de STEP
- * se calcula al iniciar el movimiento. De esta forma stepperSetSpeed()
+ * La velocidad se almacena como frecuencia de pasos. El periodo de cada
+ * pulso, incluida la rampa de aceleracion y de frenado, se calcula al
+ * iniciar y durante el movimiento. De esta forma stepperSetSpeed()
  * solamente modifica la configuracion y no arranca ningun timer.
+ *
+ * Cualquier velocidad entre 1 y STEPPER_MAX_SPS es valida: la rampa es la
+ * que permite al motor arrancar y llegar a ella sin perder pasos.
  */
 bool_t stepperSetSpeed( uint32_t stepsPerSecond )
 {
-   uint32_t periodUs = 0;
    bool_t ok = FALSE;
 
    if( !stepper.initialized ) {
       return FALSE;
    }
 
-   /* Reutilizamos la validacion que tambien se usa al iniciar el movimiento. */
-   if( !stepperSpeedToPeriodUs( stepsPerSecond, &periodUs ) ) {
+   /*
+    * Se rechazan 0 (periodo infinito) y las velocidades cuyo periodo no
+    * alcanza para los STEPPER_STEP_HIGH_US + STEPPER_STEP_LOW_US minimos.
+    */
+   if( (stepsPerSecond == 0) || (stepsPerSecond > STEPPER_MAX_SPS) ) {
       return FALSE;
    }
-
-   /* periodUs solo se utiliza para validar que la frecuencia sea posible. */
-   (void)periodUs;
 
    /* La velocidad no se cambia mientras el timer esta generando STEP. */
    taskENTER_CRITICAL();
@@ -639,8 +758,9 @@ bool_t stepperSetSpeed( uint32_t stepsPerSecond )
  *
  * IMPORTANTE 1: Se pierde un periodo desde la configuracion del timer
  * correspondiente porque recien se generaria el pulso pasado el tiempo colocado
- * al timer en Timer_Init(). A ese periodo se suma el tiempo que tarda la
- * task en despertar y armar el timer.
+ * al timer en Timer_Init(). Ese periodo es el de la velocidad inicial
+ * (1 / STEPPER_START_SPS, 2,5 ms con los valores por defecto) y a el se suma
+ * el tiempo que tarda la task en despertar y armar el timer.
  *
  * IMPORTANTE 2: esta funcion NO activa ENABLE. La habilitacion del driver es
  * responsabilidad de stepperEnable() / stepperInit().
@@ -650,7 +770,8 @@ bool_t stepperSetSpeed( uint32_t stepsPerSecond )
  */
 bool_t stepperMove( uint32_t steps )
 {
-   uint32_t periodUs = 0;
+   uint32_t targetSps;
+   uint32_t startSps;
    bool_t accepted = FALSE;
 
    /* Un movimiento solo puede comenzar con el modulo listo y habilitado. */
@@ -666,19 +787,51 @@ bool_t stepperMove( uint32_t steps )
    taskENTER_CRITICAL();
    if( stepper.state == STEPPER_STATE_IDLE ) {
 
-      /* Obtiene el periodo correspondiente a la velocidad configurada. */
-      if( stepperSpeedToPeriodUs( stepper.stepsPerSecond, &periodUs ) ) {
+      /*
+       * Perfil del movimiento. Las cuentas se hacen dentro de la seccion
+       * critica porque son breves y asi stepperSetSpeed() no puede cambiar
+       * la velocidad a mitad del calculo.
+       *
+       * Se parte de STEPPER_START_SPS, salvo que la velocidad configurada
+       * sea menor: en ese caso no hay rampa y se va a velocidad constante.
+       */
+      targetSps = stepper.stepsPerSecond;
+      startSps  = ( STEPPER_START_SPS < targetSps ) ? STEPPER_START_SPS
+                                                    : targetSps;
 
-         /*
-          * Guardamos la cantidad solicitada y el periodo, y marcamos el
-          * movimiento como activo antes de notificar a la task, para que
-          * ella encuentre el estado consistente.
-          */
-         stepper.periodUs = periodUs;
-         stepper.remainingSteps = steps;
-         stepper.state = STEPPER_STATE_STARTING;
-         accepted = TRUE;
+      stepper.startTicks  = stepperSpsToTicks( startSps );
+      stepper.targetTicks = stepperSpsToTicks( targetSps );
+      stepper.periodTicks = stepper.startTicks;
+
+      stepper.rampV0Sq = (float)startSps * (float)startSps;
+      stepper.rampTwoA = 2.0f * (float)STEPPER_ACCEL_SPS2;
+      stepper.rampTicksPerSecond = (float)Timer_microsecondsToTicks( 1000000UL );
+
+      /*
+       * Cantidad de pasos que hacen falta para pasar de la velocidad
+       * inicial a la de crucero:
+       *
+       *       e = ( vcrucero^2 - vinicial^2 ) / ( 2 * a )
+       *
+       * La rampa de frenado necesita la misma cantidad.
+       */
+      if( targetSps > startSps ) {
+         stepper.accelSteps = (uint32_t)
+            ( ( (float)targetSps * (float)targetSps - stepper.rampV0Sq ) /
+              stepper.rampTwoA );
+      } else {
+         stepper.accelSteps = 0;
       }
+
+      /*
+       * Guardamos la cantidad solicitada y marcamos el movimiento como
+       * activo antes de notificar a la task, para que ella encuentre el
+       * estado consistente.
+       */
+      stepper.totalSteps     = steps;
+      stepper.remainingSteps = steps;
+      stepper.state = STEPPER_STATE_STARTING;
+      accepted = TRUE;
    }
    taskEXIT_CRITICAL();
 

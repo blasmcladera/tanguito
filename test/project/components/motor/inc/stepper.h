@@ -33,6 +33,35 @@
  * Las funciones publicas estan pensadas para ser llamadas desde otras
  * tasks (por ejemplo rotator.c) una vez iniciado el scheduler. Ninguna
  * debe llamarse desde una interrupcion.
+ *
+ * PERFIL DE VELOCIDAD (RAMPA)
+ *
+ * Un motor paso a paso no puede arrancar de golpe a cualquier velocidad:
+ * por encima de cierta frecuencia el rotor no logra sincronizarse con los
+ * pulsos y solo vibra. Por eso stepperMove() no genera los pulsos a
+ * frecuencia constante sino con un perfil trapezoidal:
+ *
+ *       velocidad
+ *           ^
+ *           |        ___________________   <- stepperSetSpeed()
+ *           |       /                   \_
+ *           |      /                      \_
+ *           | ____/                         \____
+ *           |  STEPPER_START_SPS
+ *           +-----------------------------------> tiempo
+ *             aceleracion   crucero    frenado
+ *
+ * stepperSetSpeed() fija la velocidad MAXIMA (de crucero). La rampa la
+ * gestiona el modulo internamente: el usuario no necesita ninguna otra
+ * funcion. La aceleracion y la velocidad inicial dependen del motor y de
+ * la carga, por lo que son parametros de compilacion (STEPPER_ACCEL_SPS2 y
+ * STEPPER_START_SPS).
+ *
+ * Si el movimiento es demasiado corto para llegar a la velocidad
+ * configurada, el perfil es triangular y la velocidad maxima realmente
+ * alcanzada es:
+ *
+ *       vmax = sqrt( vstart^2 + aceleracion * pasos )
  */
 
 #ifndef _STEPPER_H_
@@ -242,6 +271,49 @@ extern "C" {
 #define STEPPER_STEP_HIGH_US  2UL
 #define STEPPER_STEP_LOW_US   2UL
 
+/*==================[perfil de velocidad]====================================*/
+
+/*
+ * Maxima cantidad de pulsos STEP por segundo que admite este modulo. Sale
+ * del periodo minimo de 4 us (2 us HIGH + 2 us LOW): 250000 pasos/s.
+ *
+ * Es el limite del generador de pulsos. No es el limite del motor (un NEMA
+ * con rampa y 12-24 V llega tipicamente a pocos miles de pasos/s) ni
+ * necesariamente el que la CPU pueda sostener atendiendo dos interrupciones
+ * por pulso.
+ */
+#define STEPPER_MAX_SPS       ( 1000000UL / ( STEPPER_STEP_HIGH_US + STEPPER_STEP_LOW_US ) )
+
+/*
+ * Velocidad con la que el motor puede arrancar (y detenerse) sin rampa, en
+ * pasos/s. Los movimientos comienzan y terminan a esta velocidad. Si
+ * stepperSetSpeed() recibe una velocidad menor o igual, el movimiento se
+ * hace a velocidad constante y sin rampa.
+ *
+ * Los valores por defecto son conservadores y estan pensados para un NEMA
+ * de paso completo sin carga. Se escalan con STEPPER_MICROSTEPS porque se
+ * expresan en pasos/microsteps. Deben ajustarse al motor real.
+ */
+#ifndef STEPPER_START_SPS
+#define STEPPER_START_SPS     ( 400UL * STEPPER_MICROSTEPS )
+#endif
+
+/*
+ * Aceleracion y frenado de la rampa, en pasos/s^2. Con el valor por defecto
+ * (10000), pasar de 400 a 1500 pasos/s lleva unos 110 ms y ~104 pasos.
+ */
+#ifndef STEPPER_ACCEL_SPS2
+#define STEPPER_ACCEL_SPS2    ( 10000UL * STEPPER_MICROSTEPS )
+#endif
+
+#if ( STEPPER_START_SPS < 1 ) || ( STEPPER_START_SPS > STEPPER_MAX_SPS )
+   #error "STEPPER_START_SPS debe estar entre 1 y STEPPER_MAX_SPS"
+#endif
+
+#if ( STEPPER_ACCEL_SPS2 < 1 )
+   #error "STEPPER_ACCEL_SPS2 debe ser mayor que 0"
+#endif
+
 /*==================[tipos]==================================================*/
 
 typedef enum {
@@ -300,11 +372,23 @@ typedef struct {
    /* Estado del movimiento actual (ver stepperState_t). */
    volatile stepperState_t state;
 
-   /* Velocidad configurada en pulsos STEP por segundo. */
+   /* Velocidad maxima (de crucero) configurada, en pulsos STEP por segundo. */
    uint32_t stepsPerSecond;
 
-   /* Periodo de STEP, en us, congelado al aceptar el movimiento. */
-   uint32_t periodUs;
+   /*
+    * Perfil del movimiento actual. Lo calcula stepperMove() al aceptar el
+    * movimiento y despues solo lo lee la interrupcion del Compare Match 0.
+    * Los periodos estan expresados en ticks del timer.
+    */
+   uint32_t totalSteps;            /* pulsos totales del movimiento          */
+   uint32_t accelSteps;            /* pulsos de la rampa de aceleracion; la
+                                      de frenado tiene la misma cantidad    */
+   uint32_t startTicks;            /* periodo a la velocidad inicial         */
+   uint32_t targetTicks;           /* periodo a la velocidad de crucero      */
+   volatile uint32_t periodTicks;  /* periodo cargado hoy en el Match 0      */
+   float rampV0Sq;                 /* velocidad inicial al cuadrado          */
+   float rampTwoA;                 /* 2 * aceleracion                        */
+   float rampTicksPerSecond;       /* frecuencia del timer en ticks/s        */
 
    /* Sentido actualmente configurado. */
    stepperDirection_t direction;
@@ -371,14 +455,28 @@ bool_t stepperDisable( void );
 bool_t stepperSetDirection( stepperDirection_t direction );
 
 /*
- * Configura la velocidad del tren de pulsos STEP.
+ * Configura la velocidad MAXIMA del tren de pulsos STEP.
  *
- * El parametro representa la cantidad de pulsos STEP enviados por segundo.
- * Ejemplo:
+ * El parametro representa la cantidad de pulsos STEP por segundo que se
+ * alcanzan en el tramo de crucero. Ejemplo:
  *
  *       stepperSetSpeed(1000);
  *
  * configura 1000 pasos/microsteps por segundo.
+ *
+ * Se acepta cualquier valor entre 1 y STEPPER_MAX_SPS. El modulo se ocupa
+ * de que el motor pueda seguirlo: stepperMove() acelera desde
+ * STEPPER_START_SPS hasta esta velocidad con la aceleracion
+ * STEPPER_ACCEL_SPS2 y frena de forma simetrica al final. Con una velocidad
+ * menor o igual a STEPPER_START_SPS no hay rampa.
+ *
+ * Retorna FALSE si la velocidad es 0 o supera STEPPER_MAX_SPS, o si hay un
+ * movimiento en curso.
+ *
+ * IMPORTANTE: es la velocidad maxima, no la garantizada. En un movimiento
+ * corto la rampa no llega a completarse (ver "PERFIL DE VELOCIDAD") y,
+ * ademas, que el motor pueda seguir fisicamente una velocidad depende de
+ * su torque, de la tension de alimentacion y de la carga.
  *
  * La velocidad se configura por separado de stepperMove(), ya que una
  * funcion define "a que velocidad" mover y la otra "cuantos pulsos"
@@ -395,7 +493,8 @@ bool_t stepperSetSpeed( uint32_t stepsPerSecond );
  *   - Si ya existe un movimiento en curso, retorna FALSE.
  *   - Requiere el scheduler en marcha: el timer lo arma la task interna.
  *
- * La funcion solamente acepta el movimiento y notifica a la task; el timer
+ * La funcion solamente acepta el movimiento, calcula su perfil de
+ * velocidad (aceleracion, crucero y frenado) y notifica a la task; el timer
  * lo arma la task y los pulsos son generados posteriormente desde las
  * interrupciones del timer. Cuando retorna TRUE, stepperIsBusy() ya
  * devuelve TRUE.

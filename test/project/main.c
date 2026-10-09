@@ -1,20 +1,27 @@
 #include "sapi.h"
 #include "FreeRTOS.h"
 #include "task.h"
+<<<<<<< HEAD
 #include "components/motor/inc/shuffler.h"
 #include "components/error/inc/tanguito_error.h"
+=======
+#include "stepper.h"
+>>>>>>> d1907a8419b87e65d89ff5d79f97c0b27ff1a458
 
-void mainTask( void* pvParameters )
+void MainTask( void* pvParameters )
 {
+   stepperSetSpeed(5000);
    while( TRUE ) {
-      gpioToggle(CIAA_BOARD_LED);
-      vTaskDelay( pdMS_TO_TICKS( 100 ) );
+      stepperMove(2000);
+      //gpioToggle(CIAA_BOARD_LED);
+      //vTaskDelay( pdMS_TO_TICKS( 1000 ) );
    }
 }
 
 int main( void )
 {
    boardConfig();
+<<<<<<< HEAD
    
    // hacemos el init del shuffler, pero más fachero porque pregunta por errores
    error_t err = shufflerInit();
@@ -23,11 +30,15 @@ int main( void )
       while( TRUE );           // no arrancamos el scheduler
    }  
 
+=======
+   stepperInit();
+   
+>>>>>>> d1907a8419b87e65d89ff5d79f97c0b27ff1a458
    xTaskCreate(
-      mainTask,           // Función de la tarea
-      "mainTask",         // Nombre de la tarea
+      MainTask,           // Funciï¿½n de la tarea
+      "MainTask",         // Nombre de la tarea
       configMINIMAL_STACK_SIZE,
-      NULL,               // Parámetros
+      NULL,               // Parï¿½metros
       tskIDLE_PRIORITY + 1,
       NULL                // Handle
    );

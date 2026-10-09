@@ -5,9 +5,9 @@
 
 void MainTask( void* pvParameters )
 {
-   stepperSetSpeed(1500);
+   stepperSetSpeed(5000);
    while( TRUE ) {
-      stepperMove(200);
+      stepperMove(2000);
       //gpioToggle(CIAA_BOARD_LED);
       //vTaskDelay( pdMS_TO_TICKS( 1000 ) );
    }

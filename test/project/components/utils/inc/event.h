@@ -7,14 +7,17 @@
 #define SHUFFLE_START         (1 << 0)
 #define SHUFFLE_DONE          (1 << 1)
 
-#define EJECT_START           (1 << 2)
-#define EJECT_DONE            (1 << 3)
+#define DEAL_START            (1 << 2)
+#define DEAL_DONE             (1 << 3)
 
-#define DEAL_START            (1 << 4)
-#define DEAL_DONE             (1 << 5)
+#define CONFIGURATION_START   (1 << 4)
+#define CONFIGURATION_DONE    (1 << 5)
 
-#define CONFIGURATION_START   (1 << 6)
-#define CONFIGURATION_DONE    (1 << 7)
+
+#define EJECT_START           (1 << 0)
+#define EJECT_DONE            (1 << 1)
+
+#define MOVE_DONE             (1 << 2)
 
 #define PRESSED_ENTER         (1 << 0)
 #define PRESSED_UP            (1 << 1)

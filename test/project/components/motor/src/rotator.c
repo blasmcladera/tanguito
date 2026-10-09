@@ -8,11 +8,11 @@
 
 #include "rotator.h"
 #include "stepper.h"
-#include "configuration.h"   /* getConfiguration(), dealConfig_t */
+#include "configuration.h"   /* getConfiguration(), config_t */
 
 #include "FreeRTOS.h"
 #include "task.h"
-#include "event_groups.h"
+#include "event.h"
 
 /* Orden de reparto en arco de 180:
  *   0: todas las rondas van jugador 0 -> N-1 (al terminar una ronda hay que
@@ -22,16 +22,19 @@
  * En arco de 360 no se usa: simplemente se sigue girando. */
 #define ROTATOR_SERPENTINE   0
 
+/* Si el stepper se traba, no queremos quedarnos dormidos para siempre */
+#define ROTATOR_MOVE_TIMEOUT_MS   10000
+
 /*
  * Se asume algo asi en configuration.h:
  *
  * typedef struct {
  *    uint16_t arcDegrees;       // 180 o 360
  *    uint8_t  players;          // cantidad de jugadores
- *    uint8_t  cardsPerPlayer;   // cartas que recibe cada jugador
+ *    uint8_t  cards;   // cartas que recibe cada jugador
  * } dealConfig_t;
  *
- * const dealConfig_t * getConfiguration( void );
+ * const config_t* getConfiguration( void );
  */
 
 /* Donde cree el software que esta parado el repartidor, en grados del
@@ -120,7 +123,7 @@ static bool_t turnDegrees( float Degrees ){
  *
  * Con 1 jugador (o 0) no hay a donde moverse: devuelve 0.
  */
-static float degreesPerPlayer( const dealConfig_t * cfg ){
+static float degreesPerPlayer( const config_t* cfg ){
    if( cfg->players <= 1 ) {
       return 0.0f;
    }
@@ -132,7 +135,7 @@ static float degreesPerPlayer( const dealConfig_t * cfg ){
 
 /* Angulo absoluto (0 = primer jugador) al que esta el jugador "player"
  * (player va de 0 a players-1) */
-static float playerAngle( const dealConfig_t * cfg, uint8_t player ){
+static float playerAngle( const config_t* cfg, uint8_t player ){
    return (float)player * degreesPerPlayer( cfg );
 }
 
@@ -149,7 +152,7 @@ static float playerAngle( const dealConfig_t * cfg, uint8_t player ){
  * Con ROTATOR_SERPENTINE (solo arco < 360) las rondas impares se recorren al
  * reves, asi el repartidor no tiene que volver al principio.
  */
-static uint8_t playerForCard( const dealConfig_t * cfg, uint32_t card ){
+static uint8_t playerForCard( const config_t* cfg, uint32_t card ){
    uint32_t round = card / cfg->players;
    uint32_t k     = card % cfg->players;
 
@@ -165,7 +168,7 @@ static uint8_t playerForCard( const dealConfig_t * cfg, uint32_t card ){
 /* Posicion de reposo al terminar de repartir:
  * centro del arco en 180 (queda mirando al medio de la mesa),
  * o 0 si es vuelta completa (no hay un "centro" que tenga sentido) */
-static float centerAngle( const dealConfig_t * cfg ){
+static float centerAngle( const config_t* cfg ){
    return (cfg->arcDegrees >= 360) ? 0.0f : (float)cfg->arcDegrees / 2.0f;
 }
 
@@ -183,30 +186,39 @@ static float centerAngle( const dealConfig_t * cfg ){
  */
 static bool_t rotateTo( float targetDeg, uint16_t arcDegrees ){
    float delta = targetDeg - currentAngleDeg;
+   EventBits_t bits;
 
    if( arcDegrees >= 360 ) {
       while( delta >  180.0f ) { delta -= 360.0f; }
       while( delta <= -180.0f ) { delta += 360.0f; }
    }
 
-   /* Se ordena el movimiento (no bloqueante) */
+   /* Limpiar ANTES de ordenar el movimiento: si quedó un MOVE_DONE viejo
+    * de antes, la espera de abajo volvería inmediatamente. */
+   xEventGroupClearBits( getMovementEventGroup(), MOVE_DONE );
+
    if( !turnDegrees( delta ) ) {
       return FALSE;
    }
 
-   /* Se espera a que el stepper termine. vTaskDelay cede la CPU a otras
-    * tasks mientras tanto. Si el stepper ya avisa el final con un bit de
-     event group esto lo tenemos que cambiar asi queda mejor y no vuelve a esta tarea
-     cada literalmente 1ms. */
-   while( stepperIsBusy() ) {
-      vTaskDelay( pdMS_TO_TICKS( 1 ) );
+   /* turnDegrees devuelve TRUE sin mover nada si el delta es menor a medio
+    * paso. En ese caso el stepper nunca va a levantar MOVE_DONE y la task
+    * se quedaría esperando, así que solo se espera si realmente se movió. */
+   if( stepperIsBusy() ) {
+      bits = xEventGroupWaitBits( getMovementEventGroup(),
+                                  MOVE_DONE,
+                                  pdTRUE,    /* limpia el bit al salir */
+                                  pdTRUE,
+                                  pdMS_TO_TICKS( ROTATOR_MOVE_TIMEOUT_MS ) );
+
+      if( (bits & MOVE_DONE) == 0 ) {
+         return FALSE;   /* timeout: no se confirmó el fin del movimiento */
+      }
    }
 
-   /* Recien ahora se da por valida la nueva posicion */
    currentAngleDeg = targetDeg;
    return TRUE;
 }
-
 /* Estos son las funciones publicas para cualquiera que las quiera usar
 */
 
@@ -226,7 +238,7 @@ void rotatorSetAngle( float Degrees ){
  * dormir esperando el siguiente pedido.
  */
 void RotatorTask( void * params ){
-   const dealConfig_t * cfg;   /* configuracion de este reparto */
+   const config_t* cfg;   /* configuracion de este reparto */
    uint32_t totalCards;        /* cartas a repartir en total */
    uint32_t card;              /* indice de la carta actual (0..total-1) */
 
@@ -240,7 +252,7 @@ void RotatorTask( void * params ){
 
       /* Se lee la configuracion al inicio de cada reparto */
       cfg = getConfiguration();
-      totalCards = (uint32_t)cfg->players * cfg->cardsPerPlayer;
+      totalCards = (uint32_t)cfg->players * cfg->cards;
 
       for( card = 0; card < totalCards; card++ ) {
          uint8_t player = playerForCard( cfg, card );
@@ -251,8 +263,8 @@ void RotatorTask( void * params ){
          }
 
          /* 2) Expulsar: pedir que salga la carta y esperar a que termine */
-         xEventGroupSetBits( getMainEventGroup(), EJECT_START );
-         xEventGroupWaitBits( getMainEventGroup(), EJECT_DONE, pdTRUE, pdTRUE, portMAX_DELAY );
+         xEventGroupSetBits( getMovementEventGroup(), EJECT_START );
+         xEventGroupWaitBits( getMovementEventGroup(), EJECT_DONE, pdTRUE, pdTRUE, portMAX_DELAY );
       }
 
       /* Terminado (o abortado): volver al reposo y avisar al main */

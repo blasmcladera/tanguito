@@ -5,7 +5,8 @@ DEFINES+=SAPI_USE_INTERRUPTS
 # Compile options
 
 VERBOSE=n
-OPT=g
+OPT=2
+INCLUDES+=-fno-math-errno
 USE_NANO=y
 SEMIHOST=n
 USE_FPU=y

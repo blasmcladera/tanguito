@@ -153,6 +153,25 @@ extern "C" {
 #define STEPPER_TIMER         TIMER0
 #endif
 
+/*
+ * Registros del periferico del timer elegido (el puntero LPC_TIMERx de
+ * chip.h).
+ *
+ * STEPPER_TIMER es el valor del enum de la sAPI (TIMER0..TIMER3) y sirve
+ * para las funciones Timer_xxx(). La lectura del contador desde la
+ * interrupcion, que la sAPI no ofrece, necesita en cambio el puntero a los
+ * registros (LPC_TIMER0..LPC_TIMER3). Este define lo obtiene pegando el
+ * prefijo LPC_ al nombre del timer en tiempo de compilacion:
+ *
+ *       STEPPER_TIMER = TIMER0  ->  STEPPER_TIMER_REGS = LPC_TIMER0
+ *       STEPPER_TIMER = TIMER1  ->  STEPPER_TIMER_REGS = LPC_TIMER1
+ *
+ * De esta forma basta con cambiar STEPPER_TIMER y ambos quedan coherentes.
+ * STEPPER_CAT se define mas abajo; no importa el orden porque la expansion
+ * ocurre donde se usa el define.
+ */
+#define STEPPER_TIMER_REGS    STEPPER_CAT( LPC_, STEPPER_TIMER )
+
 /*==================[deteccion de pines fijos VCC / GND]=====================*/
 
 /*

@@ -35,6 +35,7 @@
 /*==================[inclusions]=============================================*/
 
 #include <stddef.h>
+#include <math.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -43,7 +44,6 @@
 
 #include "sapi_gpio.h"
 #include "sapi_timer.h"
-
 #include "stepper.h"
 
 /*==================[macros y definiciones]==================================*/
@@ -184,7 +184,6 @@ typedef struct {
 
 } stepper_t;
 
-
 /*==================[estado interno]=========================================*/
 
 /*
@@ -243,43 +242,6 @@ static uint32_t stepperSpsToTicks( uint32_t stepsPerSecond )
 }
 
 /*
- * Raiz cuadrada de un float.
- *
- * En ARM se usa directamente la instruccion de la FPU (VSQRT, 14 ciclos).
- * No se usa sqrtf() porque con -Og el compilador la deja como una llamada
- * a la libreria matematica, que dentro de una interrupcion es innecesaria,
- * mas lenta y, segun la version de newlib, puede ser una rutina por
- * software. Fuera de ARM (por ejemplo al probar el modulo en una PC) se usa
- * la funcion del compilador.
- */
-static inline float stepperSqrt( float x )
-{
-#if defined( __arm__ ) && defined( __ARM_FP )
-   float r;
-   __asm volatile ( "vsqrt.f32 %0, %1" : "=t"( r ) : "t"( x ) );
-   return r;
-#else
-   return __builtin_sqrtf( x );
-#endif
-}
-
-/*
- * Devuelve los registros del periferico timer que corresponde a
- * stepper.timer. Se usa para leer el contador (TC) desde la interrupcion,
- * lo que la sAPI no ofrece.
- */
-static LPC_TIMER_T* stepperTimerRegs( void )
-{
-   switch( stepper.timer ) {
-   case TIMER1: return LPC_TIMER1;
-   case TIMER2: return LPC_TIMER2;
-   case TIMER3: return LPC_TIMER3;
-   case TIMER0:
-   default:     return LPC_TIMER0;
-   }
-}
-
-/*
  * Calcula el periodo del proximo pulso y lo carga en el Compare Match 0.
  *
  * Se ejecuta en contexto de interrupcion, justo despues de emitir un pulso
@@ -310,10 +272,18 @@ static LPC_TIMER_T* stepperTimerRegs( void )
  * Se usa float (FPU del Cortex-M4F) porque la alternativa entera tendria
  * que perder precision a velocidades altas: la variacion del periodo entre
  * pulsos consecutivos es una fraccion de tick. El costo es de decenas de
- * ciclos (una raiz y una division, ambas instrucciones de la FPU). Esto requiere compilar con
- * -mfpu=fpv4-sp-d16 y -mfloat-abi=hard, lo mismo que ya exige el port
- * ARM_CM4F de FreeRTOS, que guarda el contexto de la FPU de forma automatica
- * y diferida cuando una interrupcion la usa.
+ * ciclos (una raiz y una division). Esto requiere compilar con
+ * -mfpu=fpv4-sp-d16 y -mfloat-abi=hard (USE_FPU=y), lo mismo que ya exige el
+ * port ARM_CM4F de FreeRTOS, que guarda el contexto de la FPU de forma
+ * automatica y diferida cuando una interrupcion la usa.
+ *
+ * La raiz es sqrtf() de math.h, NO sqrt(): sqrt() trabaja en double y la FPU
+ * del M4 es solo de simple precision, asi que seria una rutina por software.
+ * Con OPT=g (-Og) y sin -fno-math-errno el compilador deja sqrtf() como una
+ * llamada a la libm en vez de la instruccion VSQRT; con -O1 o mas y
+ * -fno-math-errno se convierte en la instruccion de hardware. En ambos casos
+ * es correcto; la llamada a la libm solo es mas lenta (irrelevante a las
+ * velocidades en que se mueve el motor, el periodo es de miles de ciclos).
  *
  * CARGA DEL PERIODO
  *
@@ -340,7 +310,7 @@ static void stepperRampUpdate( uint32_t remaining )
    } else {
       float v2 = stepper.rampV0Sq + stepper.rampTwoA * (float)e;
 
-      ticks = (uint32_t)( stepper.rampTicksPerSecond / stepperSqrt( v2 ) );
+      ticks = (uint32_t)( stepper.rampTicksPerSecond / sqrtf( v2 ) );
 
       /* Nunca mas rapido que la velocidad de crucero configurada. */
       if( ticks < stepper.targetTicks ) {
@@ -353,7 +323,8 @@ static void stepperRampUpdate( uint32_t remaining )
       return;
    }
 
-   counter = Chip_TIMER_ReadCount( stepperTimerRegs() );
+   /* El contador (TC) no lo ofrece la sAPI: se lee por los registros del timer. */
+   counter = Chip_TIMER_ReadCount( STEPPER_TIMER_REGS );
    if( ticks < ( counter + STEPPER_MATCH_GUARD_TICKS ) ) {
       ticks = counter + STEPPER_MATCH_GUARD_TICKS;
    }

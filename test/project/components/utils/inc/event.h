@@ -27,6 +27,7 @@
 
 
 EventGroupHandle_t getMainEventGroup();
+EventGroupHandle_t getMovementEventGroup();
 EventGroupHandle_t getButtonEventGroup();
 uint8_t isEventAndClear(EventBits_t);
 void eventInit();

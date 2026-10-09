@@ -101,6 +101,88 @@
    #define STEPPER_ENABLE_WRITE( v )  gpioWrite( stepper.enablePin, (v) )
 #endif
 
+/*==================[tipos internos]=========================================*/
+
+/*
+ * Estados del movimiento. Las transiciones validas son:
+ *
+ *       IDLE --stepperMove()--> STARTING --task arma el timer--> RUNNING
+ *       RUNNING --ultimo pulso o stepperStop()--> ENDING
+ *       STARTING --stepperStop()--> ENDING
+ *       ENDING --task libera el timer--> IDLE
+ *
+ *   IDLE     : sin movimiento y con el timer liberado.
+ *   STARTING : stepperMove() acepto el movimiento; la task todavia no
+ *              termino de armar el timer (no se genera ningun pulso).
+ *   RUNNING  : el timer esta armado y las interrupciones generan pulsos.
+ *   ENDING   : no se generan mas pulsos; falta que la task libere el timer.
+ */
+typedef enum {
+   STEPPER_STATE_IDLE = 0,
+   STEPPER_STATE_STARTING,
+   STEPPER_STATE_RUNNING,
+   STEPPER_STATE_ENDING
+} stepperState_t;
+
+/*
+ * Estado interno del driver.
+ *
+ * Se agrupan en una sola estructura todas las variables que pertenecen al
+ * stepper. Actualmente el modulo trabaja con una unica instancia, por lo
+ * que las funciones publicas no necesitan recibir un puntero al objeto.
+ *
+ * La estructura es privada de este archivo: nadie fuera del modulo necesita
+ * conocerla, y asi stepper.h solo expone la interfaz publica. Deja agrupado
+ * el estado y facilita una futura extension a varias instancias.
+ *
+ * Los campos que comparten las tasks y las interrupciones del timer
+ * (state y remainingSteps) son volatile. Las tasks los modifican siempre
+ * dentro de una seccion critica de FreeRTOS.
+ */
+typedef struct {
+   /* Pines fisicos utilizados por el driver. */
+   gpioMap_t stepPin;
+   gpioMap_t dirPin;
+   gpioMap_t enablePin;
+
+   /* Timer utilizado para generar el tren de pulsos STEP. */
+   timerMap_t timer;
+
+   /* Cantidad de pulsos que aun falta generar en el movimiento actual. */
+   volatile uint32_t remainingSteps;
+
+   /* Estado del movimiento actual (ver stepperState_t). */
+   volatile stepperState_t state;
+
+   /* Velocidad maxima (de crucero) configurada, en pulsos STEP por segundo. */
+   uint32_t stepsPerSecond;
+
+   /*
+    * Perfil del movimiento actual. Lo calcula stepperMove() al aceptar el
+    * movimiento y despues solo lo lee la interrupcion del Compare Match 0.
+    * Los periodos estan expresados en ticks del timer.
+    */
+   uint32_t totalSteps;            /* pulsos totales del movimiento          */
+   uint32_t accelSteps;            /* pulsos de la rampa de aceleracion; la
+                                      de frenado tiene la misma cantidad    */
+   uint32_t startTicks;            /* periodo a la velocidad inicial         */
+   uint32_t targetTicks;           /* periodo a la velocidad de crucero      */
+   volatile uint32_t periodTicks;  /* periodo cargado hoy en el Match 0      */
+   float rampV0Sq;                 /* velocidad inicial al cuadrado          */
+   float rampTwoA;                 /* 2 * aceleracion                        */
+   float rampTicksPerSecond;       /* frecuencia del timer en ticks/s        */
+
+   /* Estado de inicializacion del modulo. */
+   bool_t initialized;
+
+   /* Estado logico del pin ENABLE: TRUE si el driver esta habilitado. */
+   bool_t enabled;
+
+   /* Task interna que arma y libera el timer. */
+   TaskHandle_t taskHandle;
+
+} stepper_t;
+
 /*==================[estado interno]=========================================*/
 
 /*
@@ -125,7 +207,6 @@ static stepper_t stepper = {
    /* rampV0Sq       */ 0.0f,
    /* rampTwoA       */ 0.0f,
    /* rampTicksPerSecond */ 0.0f,
-   /* direction      */ STEPPER_DIRECTION_FORWARD,
    /* initialized    */ FALSE,
    /* enabled        */ FALSE,
    /* taskHandle     */ NULL
@@ -157,6 +238,27 @@ static uint32_t stepperSpsToTicks( uint32_t stepsPerSecond )
    const uint32_t ticksPerSecond = Timer_microsecondsToTicks( 1000000UL );
 
    return ( ticksPerSecond + ( stepsPerSecond / 2 ) ) / stepsPerSecond;
+}
+
+/*
+ * Raiz cuadrada de un float.
+ *
+ * En ARM se usa directamente la instruccion de la FPU (VSQRT, 14 ciclos).
+ * No se usa sqrtf() porque con -Og el compilador la deja como una llamada
+ * a la libreria matematica, que dentro de una interrupcion es innecesaria,
+ * mas lenta y, segun la version de newlib, puede ser una rutina por
+ * software. Fuera de ARM (por ejemplo al probar el modulo en una PC) se usa
+ * la funcion del compilador.
+ */
+static inline float stepperSqrt( float x )
+{
+#if defined( __arm__ ) && defined( __ARM_FP )
+   float r;
+   __asm volatile ( "vsqrt.f32 %0, %1" : "=t"( r ) : "t"( x ) );
+   return r;
+#else
+   return __builtin_sqrtf( x );
+#endif
 }
 
 /*
@@ -206,7 +308,7 @@ static LPC_TIMER_T* stepperTimerRegs( void )
  * Se usa float (FPU del Cortex-M4F) porque la alternativa entera tendria
  * que perder precision a velocidades altas: la variacion del periodo entre
  * pulsos consecutivos es una fraccion de tick. El costo es de decenas de
- * ciclos (una raiz y una division en la FPU). Esto requiere compilar con
+ * ciclos (una raiz y una division, ambas instrucciones de la FPU). Esto requiere compilar con
  * -mfpu=fpv4-sp-d16 y -mfloat-abi=hard, lo mismo que ya exige el port
  * ARM_CM4F de FreeRTOS, que guarda el contexto de la FPU de forma automatica
  * y diferida cuando una interrupcion la usa.
@@ -236,7 +338,7 @@ static void stepperRampUpdate( uint32_t remaining )
    } else {
       float v2 = stepper.rampV0Sq + stepper.rampTwoA * (float)e;
 
-      ticks = (uint32_t)( stepper.rampTicksPerSecond / __builtin_sqrtf( v2 ) );
+      ticks = (uint32_t)( stepper.rampTicksPerSecond / stepperSqrt( v2 ) );
 
       /* Nunca mas rapido que la velocidad de crucero configurada. */
       if( ticks < stepper.targetTicks ) {
@@ -533,12 +635,8 @@ bool_t stepperInit( void )
       return FALSE;
    }
 
-#if STEPPER_DIR_FIXED
-   /* El sentido lo impone el cableado; solo se refleja en el estado. */
-   stepper.direction = STEPPER_DIR_FIXED_DIRECTION;
-#else
-   /* El sentido por defecto es FORWARD. */
-   stepper.direction = STEPPER_DIRECTION_FORWARD;
+#if !STEPPER_DIR_FIXED
+   /* El sentido por defecto es FORWARD. Con DIR fijo lo impone el cableado. */
    if( STEPPER_DIR_WRITE( FALSE ) == FALSE ) {
       return FALSE;
    }
@@ -687,7 +785,6 @@ bool_t stepperSetDirection( stepperDirection_t direction )
    if( direction != STEPPER_DIR_FIXED_DIRECTION ) {
       return FALSE;
    }
-   stepper.direction = direction;
    ok = TRUE;
 #else
    /*
@@ -697,11 +794,8 @@ bool_t stepperSetDirection( stepperDirection_t direction )
     */
    taskENTER_CRITICAL();
    if( stepper.state == STEPPER_STATE_IDLE ) {
-      if( STEPPER_DIR_WRITE( (direction == STEPPER_DIRECTION_REVERSE) ?
-                             TRUE : FALSE ) != FALSE ) {
-         stepper.direction = direction;
-         ok = TRUE;
-      }
+      ok = ( STEPPER_DIR_WRITE( (direction == STEPPER_DIRECTION_REVERSE) ?
+                                TRUE : FALSE ) != FALSE );
    }
    taskEXIT_CRITICAL();
 #endif

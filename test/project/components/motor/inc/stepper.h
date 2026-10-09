@@ -134,14 +134,13 @@ extern "C" {
 #define STEPPER_ENABLE_PIN    T_FIL2
 #endif
 
-#define STEPPER_STEP_ANGLE_DEG   1.8f   // grados por paso completo del NEMA 
+/* Grados por paso completo del motor (NEMA de 200 pasos/vuelta). Lo usa rotator.c. */
+#define STEPPER_STEP_ANGLE_DEG   1.8f
 
-/* Relación = dientes del engranaje grande / dientes del engranaje del motor.
- * Ej: motor con 20 dientes y engranaje de 100 -> 5.0f
- * Por ahora 1.0f (sin reducción) hasta saber los valores reales. */
-#define STEPPER_GEAR_RATIO       1.0f
-
-#define STEPPER_MICROSTEPS       1      /* 1, 2, 4, 8 o 16 según MS1/MS2/MS3 del A4988 */
+/* Microstepping fijado por hardware con MS1/MS2/MS3 del A4988: 1, 2, 4, 8 o 16. Lo usa rotator.c. */
+#ifndef STEPPER_MICROSTEPS
+#define STEPPER_MICROSTEPS       1
+#endif
 
 /*
  * Timer utilizado para generar los pulsos STEP.
@@ -184,14 +183,14 @@ extern "C" {
  *   STEPPER_xxx_FIXED        1 si el pin esta cableado a VCC o GND, 0 si es
  *                            un GPIO comun.
  *   STEPPER_xxx_FIXED_LEVEL  nivel logico fijo del pin (TRUE = VCC,
- *                            FALSE = GND). Solo existe si FIXED es 1.
+ *                            FALSE = GND). Solo existe si FIXED es 1 y solo
+ *                            para DIR y ENABLE: un STEP fijo no tiene nivel
+ *                            util porque directamente no genera pulsos.
  */
 #if   ( STEPPER_PINKIND( STEPPER_STEP_PIN ) == STEPPER_PINKIND_VCC )
    #define STEPPER_STEP_FIXED         1
-   #define STEPPER_STEP_FIXED_LEVEL   TRUE
 #elif ( STEPPER_PINKIND( STEPPER_STEP_PIN ) == STEPPER_PINKIND_GND )
    #define STEPPER_STEP_FIXED         1
-   #define STEPPER_STEP_FIXED_LEVEL   FALSE
 #else
    #define STEPPER_STEP_FIXED         0
 #endif
@@ -321,88 +320,6 @@ typedef enum {
    STEPPER_DIRECTION_REVERSE = 1
 } stepperDirection_t;
 
-/*
- * Estados del movimiento. Las transiciones validas son:
- *
- *       IDLE --stepperMove()--> STARTING --task arma el timer--> RUNNING
- *       RUNNING --ultimo pulso o stepperStop()--> ENDING
- *       STARTING --stepperStop()--> ENDING
- *       ENDING --task libera el timer--> IDLE
- *
- *   IDLE     : sin movimiento y con el timer liberado.
- *   STARTING : stepperMove() acepto el movimiento; la task todavia no
- *              termino de armar el timer (no se genera ningun pulso).
- *   RUNNING  : el timer esta armado y las interrupciones generan pulsos.
- *   ENDING   : no se generan mas pulsos; falta que la task libere el timer.
- */
-typedef enum {
-   STEPPER_STATE_IDLE = 0,
-   STEPPER_STATE_STARTING,
-   STEPPER_STATE_RUNNING,
-   STEPPER_STATE_ENDING
-} stepperState_t;
-
-/*
- * Estado interno del driver.
- *
- * Se agrupan en una sola estructura todas las variables que pertenecen al
- * stepper. Actualmente el modulo trabaja con una unica instancia, por lo
- * que las funciones publicas no necesitan recibir un puntero al objeto.
- *
- * La estructura deja agrupado el estado y facilita una futura extension a
- * varias instancias sin volver a repartir las variables globales entre
- * distintas partes del archivo.
- *
- * Los campos que comparten las tasks y las interrupciones del timer
- * (state y remainingSteps) son volatile. Las tasks los modifican siempre
- * dentro de una seccion critica de FreeRTOS.
- */
-typedef struct {
-   /* Pines fisicos utilizados por el driver. */
-   gpioMap_t stepPin;
-   gpioMap_t dirPin;
-   gpioMap_t enablePin;
-
-   /* Timer utilizado para generar el tren de pulsos STEP. */
-   timerMap_t timer;
-
-   /* Cantidad de pulsos que aun falta generar en el movimiento actual. */
-   volatile uint32_t remainingSteps;
-
-   /* Estado del movimiento actual (ver stepperState_t). */
-   volatile stepperState_t state;
-
-   /* Velocidad maxima (de crucero) configurada, en pulsos STEP por segundo. */
-   uint32_t stepsPerSecond;
-
-   /*
-    * Perfil del movimiento actual. Lo calcula stepperMove() al aceptar el
-    * movimiento y despues solo lo lee la interrupcion del Compare Match 0.
-    * Los periodos estan expresados en ticks del timer.
-    */
-   uint32_t totalSteps;            /* pulsos totales del movimiento          */
-   uint32_t accelSteps;            /* pulsos de la rampa de aceleracion; la
-                                      de frenado tiene la misma cantidad    */
-   uint32_t startTicks;            /* periodo a la velocidad inicial         */
-   uint32_t targetTicks;           /* periodo a la velocidad de crucero      */
-   volatile uint32_t periodTicks;  /* periodo cargado hoy en el Match 0      */
-   float rampV0Sq;                 /* velocidad inicial al cuadrado          */
-   float rampTwoA;                 /* 2 * aceleracion                        */
-   float rampTicksPerSecond;       /* frecuencia del timer en ticks/s        */
-
-   /* Sentido actualmente configurado. */
-   stepperDirection_t direction;
-
-   /* Estado de inicializacion del modulo. */
-   bool_t initialized;
-
-   /* Estado logico del pin ENABLE: TRUE si el driver esta habilitado. */
-   bool_t enabled;
-
-   /* Task interna que arma y libera el timer. */
-   TaskHandle_t taskHandle;
-
-} stepper_t;
 
 /*==================[funciones publicas]=====================================*/
 

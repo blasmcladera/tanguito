@@ -43,6 +43,7 @@
 
 #include "sapi_gpio.h"
 #include "sapi_timer.h"
+
 #include "stepper.h"
 
 /*==================[macros y definiciones]==================================*/
@@ -182,6 +183,7 @@ typedef struct {
    TaskHandle_t taskHandle;
 
 } stepper_t;
+
 
 /*==================[estado interno]=========================================*/
 

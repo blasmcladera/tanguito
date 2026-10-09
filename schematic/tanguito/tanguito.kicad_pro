@@ -661,7 +661,7 @@
         "uuid": "9a9dbedc-f647-45f6-bf2f-0ae89a9fba5f"
       }
     ],
-    "used_designators": "U1-2,M1-3,#PWR1-17,A1,C1,J1",
+    "used_designators": "U1-3,M1-4,#PWR1-26,LCD1,A1,HW133AF1,C1,J1,LED1",
     "variants": []
   },
   "sheets": [

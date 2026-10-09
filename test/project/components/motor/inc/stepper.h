@@ -338,6 +338,7 @@ typedef enum {
  *
  * El movimiento aun no comienza durante la inicializacion.
  */
+
 bool_t stepperInit( void );
 
 /*

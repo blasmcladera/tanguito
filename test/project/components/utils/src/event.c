@@ -1,16 +1,20 @@
 #include "event.h"
 
 static EventGroupHandle_t mainEventGroup = NULL;
+static EventGroupHandle_t movementEventGroup = NULL;
 static EventGroupHandle_t buttonEventGroup = NULL;
 
 EventGroupHandle_t getMainEventGroup()    {return mainEventGroup;}
+
+EventGroupHandle_t getMovementEventGroup()    {return movementEventGroup;}
 
 EventGroupHandle_t getButtonEventGroup()  {return buttonEventGroup;}
 
 void eventInit(){
    mainEventGroup = xEventGroupCreate();
+   movementEventGroup = xEventGroupCreate();
    buttonEventGroup = xEventGroupCreate();
-   if ((mainEventGroup == NULL) | (buttonEventGroup == NULL)){
+   if ((mainEventGroup == NULL) | (buttonEventGroup == NULL) | (movementEventGroup == NULL) ){
       //ERROR
    }
    

@@ -25,7 +25,7 @@ static void update(uint8_t event){
             case PRESSED_UP:     config.players_aux++; break;
             case PRESSED_DOWN:   config.players_aux--; break;
             case PRESSED_BACK:
-               config.players_aux = 0;
+               config.players_aux = config.players;
                config.actual = SELECTING;
                break;
             default: break;
@@ -40,7 +40,7 @@ static void update(uint8_t event){
             case PRESSED_UP:     config.cards_aux++; break;
             case PRESSED_DOWN:   config.cards_aux--; break;
             case PRESSED_BACK:
-               config.cards_aux = 0;
+               config.cards_aux = config.cards;
                config.actual = SELECTING;
                break;
             default: break;

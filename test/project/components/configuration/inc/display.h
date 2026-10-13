@@ -62,7 +62,7 @@ extern "C" {
 #define DISPLAY_TEXT_START        "Iniciar"
 #endif
 #ifndef DISPLAY_TEXT_LOADING
-#define DISPLAY_TEXT_LOADING      "Cargando"
+#define DISPLAY_TEXT_LOADING      "Shuffleando"
 #endif
 
 /* Titileo de la opcion elegida: visible / oculta (ms). */

@@ -6418,16 +6418,7 @@
 		)
 		(uuid "10e8e2c1-0d1f-4c32-9145-f43879f1d9df")
 	)
-	(wire
-		(pts
-			(xy 57.15 50.8) (xy 50.8 50.8)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1682cfb9-552d-4d22-90fb-f52931998ae6")
-	)
+	
 	(wire
 		(pts
 			(xy 254 148.59) (xy 260.35 148.59)
@@ -6938,16 +6929,7 @@
 		)
 		(uuid "9aa13c22-c5ca-4856-8276-b83f1bc81bb5")
 	)
-	(wire
-		(pts
-			(xy 57.15 45.72) (xy 50.8 45.72)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "9ba46a05-f3e8-4212-abea-257f362f660b")
-	)
+	
 	(wire
 		(pts
 			(xy 195.58 78.74) (xy 194.31 78.74)
@@ -6988,16 +6970,7 @@
 		)
 		(uuid "b57844c4-9dfb-45d1-aaeb-0667b438f87a")
 	)
-	(wire
-		(pts
-			(xy 57.15 43.18) (xy 50.8 43.18)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "bc6ce453-8ab8-4c63-8938-58bf1255ef9b")
-	)
+	
 	(wire
 		(pts
 			(xy 20.32 27.94) (xy 25.4 27.94)
@@ -7038,16 +7011,7 @@
 		)
 		(uuid "cc9e9371-ede6-4d3b-8e32-6ec9e01d14bf")
 	)
-	(wire
-		(pts
-			(xy 50.8 40.64) (xy 57.15 40.64)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "cdc3311d-d4e4-41e4-aa0b-d42168373094")
-	)
+	
 	(wire
 		(pts
 			(xy 99.06 30.48) (xy 105.41 30.48)
@@ -7068,16 +7032,7 @@
 		)
 		(uuid "d1294640-a13f-453f-b31e-9063f2a97b47")
 	)
-	(wire
-		(pts
-			(xy 57.15 38.1) (xy 50.8 38.1)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d2e38e40-9716-48a8-b161-a62cbf47178e")
-	)
+	
 	(wire
 		(pts
 			(xy 194.31 71.12) (xy 194.31 78.74)
@@ -7118,16 +7073,7 @@
 		)
 		(uuid "ec2deaf4-bec8-4048-b4ae-b43a78959b96")
 	)
-	(wire
-		(pts
-			(xy 99.06 33.02) (xy 100.33 33.02)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f12d9dc2-6d9a-4102-8a38-db8a9c03eeed")
-	)
+	
 	(wire
 		(pts
 			(xy 153.67 59.69) (xy 153.67 57.15)
@@ -7157,6 +7103,66 @@
 			(type default)
 		)
 		(uuid "fb74980f-c10b-4ee3-85c6-f4071d160fcd")
+	)
+		(label "ENET_RXD1"
+		(at 25.4 30.48 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "dd75fa56-a807-4aee-896d-d8de8b6b7050")
+	)
+	(label "ENET_TXEN"
+		(at 25.4 35.56 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "2afa2549-3c04-4033-aab5-a3c4b617fbb5")
+	)
+	(label "GPIO7"
+		(at 50.8 27.94 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "f5d999f8-62f5-498f-a1fc-12c330ce2333")
+	)
+	(label "GPIO8"
+		(at 50.8 22.86 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "63fd3350-bf89-466d-be05-338e93222f87")
+	)
+	(label "T_FIL0"
+		(at 99.06 40.64 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "2751a074-7656-464c-9604-f6726daca2e8")
+	)
+	(label "T_COL0"
+		(at 99.06 25.4 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "7307e38b-ac6f-41c9-a5fe-eb2059c05e98")
 	)
 	(label "M2-"
 		(at 224.79 43.18 0)
@@ -7188,7 +7194,7 @@
 		)
 		(uuid "03354422-80c6-478c-ab90-7b0d25a93c75")
 	)
-	(label "PWM4"
+	(label "GPIO8"
 		(at 186.69 134.62 0)
 		(effects
 			(font
@@ -7228,7 +7234,7 @@
 		)
 		(uuid "2998dd49-967f-4696-851f-4d0721ebd404")
 	)
-	(label "GPIO1"
+	(label "T_FIL0"
 		(at 186.69 38.1 0)
 		(effects
 			(font
@@ -7248,16 +7254,7 @@
 		)
 		(uuid "375af4be-c9fa-455a-ac3e-05b901e2529f")
 	)
-	(label "GPIO1"
-		(at 52.07 43.18 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "39fbe8c8-d6c4-41e2-b814-a7efb1bce325")
-	)
+	
 	(label "I2C_SDA"
 		(at 121.92 99.06 0)
 		(effects
@@ -7268,7 +7265,7 @@
 		)
 		(uuid "4cb2814e-e9f0-4c58-99bc-4715dc1c3056")
 	)
-	(label "GPIO3"
+	(label "ENET_TXEN"
 		(at 189.23 91.44 0)
 		(effects
 			(font
@@ -7298,7 +7295,7 @@
 		)
 		(uuid "688f79a5-2037-401a-9dd9-4ca2046cbdcf")
 	)
-	(label "GPIO4"
+	(label "GPIO7"
 		(at 186.69 129.54 0)
 		(effects
 			(font
@@ -7308,17 +7305,8 @@
 		)
 		(uuid "74b99947-767a-4423-b1a1-c987d2de209f")
 	)
-	(label "PWM0"
-		(at 100.33 33.02 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "7ac34c9c-aac1-46d5-a80b-5e7250b9167d")
-	)
-	(label "PWM3"
+	
+	(label "PWM4"
 		(at 186.69 40.64 0)
 		(effects
 			(font
@@ -7328,7 +7316,7 @@
 		)
 		(uuid "84f46960-9680-4c47-bd46-558a3d8ec247")
 	)
-	(label "PWM0"
+	(label "PWM3"
 		(at 186.69 30.48 0)
 		(effects
 			(font
@@ -7348,7 +7336,7 @@
 		)
 		(uuid "8b84faf0-4e3c-4d76-9421-52833912d3ea")
 	)
-	(label "GPIO2"
+	(label "ENET_RXD1"
 		(at 189.23 88.9 0)
 		(effects
 			(font
@@ -7449,16 +7437,7 @@
 		)
 		(uuid "b764fdaf-ae39-4363-8b28-09c908060ad5")
 	)
-	(label "GPIO3"
-		(at 52.07 38.1 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "c54da732-2736-48d9-8696-427b9df48fee")
-	)
+	
 	(label "M1-"
 		(at 224.79 35.56 0)
 		(effects
@@ -7479,17 +7458,8 @@
 		)
 		(uuid "cf833f52-a7cb-4e42-a32a-e820a824ac66")
 	)
-	(label "GPIO2"
-		(at 52.07 45.72 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "d272d7d6-ee2c-4e59-939a-f08cf49116aa")
-	)
-	(label "GPIO0"
+	
+	(label "T_COL0"
 		(at 186.69 25.4 0)
 		(effects
 			(font
@@ -7519,26 +7489,8 @@
 		)
 		(uuid "e21c662d-ff6a-4ceb-9e24-caea2e5ac57f")
 	)
-	(label "GPIO4"
-		(at 52.07 40.64 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e5016745-9bd8-4374-95e9-44571ef0b277")
-	)
-	(label "GPIO0"
-		(at 52.07 50.8 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "e6c31c73-0db4-4b37-8fc6-dd353a6446c9")
-	)
+	
+	
 	(label "I2C_SCL"
 		(at 100.33 71.12 0)
 		(effects
@@ -10779,7 +10731,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical"
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical"
 			(at 209.55 54.61 0)
 			(hide yes)
 			(show_name no)

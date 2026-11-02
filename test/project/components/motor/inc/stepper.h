@@ -123,15 +123,15 @@ extern "C" {
  *                   Ver stepperEnable() y stepperDisable().
  */
 #ifndef STEPPER_STEP_PIN
-#define STEPPER_STEP_PIN      GPIO2
+#define STEPPER_STEP_PIN      ENET_RXD1   /* P2.4 */
 #endif
 
 #ifndef STEPPER_DIR_PIN
-#define STEPPER_DIR_PIN       GPIO3
+#define STEPPER_DIR_PIN       ENET_TXEN   /* P2.6 */
 #endif
 
 #ifndef STEPPER_ENABLE_PIN
-#define STEPPER_ENABLE_PIN    T_FIL2
+#define STEPPER_ENABLE_PIN    GND         /* ~ENABLE cableado a GND en la placa */
 #endif
 
 /* Grados por paso completo del motor (NEMA de 200 pasos/vuelta). Lo usa rotator.c. */

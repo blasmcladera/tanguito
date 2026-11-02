@@ -64,6 +64,7 @@ while (1){
    } while (config.actual != START);
    config.actual = SELECTING;
    config.selected= SELECT_PLAYERS;
+   config.arcDegrees= 180;
    config.players_aux = config.players;
    config.cards_aux = config.cards;
    xEventGroupSetBits(getMainEventGroup(), CONFIGURATION_DONE);
@@ -90,8 +91,7 @@ void configInit(){
       tskIDLE_PRIORITY + 1,
       NULL                // Handle
    );
-
-
-
-
+   
 }
+
+config_t * getConfiguration(void){ return &config;}

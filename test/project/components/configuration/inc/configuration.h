@@ -19,10 +19,12 @@ typedef struct {
    uint8_t players_aux;
    uint8_t cards;
    uint8_t cards_aux;
+   uint16_t arcDegrees;
 } config_t;
 
 void configInit(void);
 
+config_t * getConfiguration(void);
 
 
 

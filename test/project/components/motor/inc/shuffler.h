@@ -14,18 +14,18 @@
  */
 
 typedef enum {
-   SHUFFLE_LEFT,    // Motor 1: ENA <- T_FIL1 (PWM0)
-   SHUFFLE_RIGHT,   // Motor 2: ENB <- T_FIL2 (PWM3)
+   SHUFFLE_LEFT,    // Motor 1: ENA <- T_FIL2 (PWM3)
+   SHUFFLE_RIGHT,   // Motor 2: ENB <- T_FIL3 (PWM4)
    SHUFFLE_MOTOR_COUNT
 } shuffle_motor_t;
 
 // Pines de PWM (enables del L298N)
-#define MOTOR_SHUFFLER_PWM_LEFT_PIN      PWM0   // T_FIL1 -> ENA
-#define MOTOR_SHUFFLER_PWM_RIGHT_PIN     PWM3   // T_FIL2 -> ENB
+#define MOTOR_SHUFFLER_PWM_LEFT_PIN      PWM3   // T_FIL2 (P1.37) -> ENA
+#define MOTOR_SHUFFLER_PWM_RIGHT_PIN     PWM4   // T_FIL3 (P1.35) -> ENB
 
 // Pines de dirección (siempre en 1). IN2 e IN3 van a GND por hardware.
-#define MOTOR_SHUFFLER_IN1_PIN           GPIO0
-#define MOTOR_SHUFFLER_IN4_PIN           GPIO3
+#define MOTOR_SHUFFLER_IN1_PIN           T_COL0 // P1.39 -> IN1
+#define MOTOR_SHUFFLER_IN4_PIN           T_FIL0 // P1.33 -> IN4
 
 // Velocidad en porcentaje de potencia
 #define MOTOR_SHUFFLER_MIN_SPEED         0

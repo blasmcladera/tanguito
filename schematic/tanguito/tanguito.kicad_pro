@@ -178,7 +178,6 @@
         {
           "td_allow_use_two_tracks": true,
           "td_curve_segcount": 0,
-          "td_enabled": false,
           "td_height_ratio": 1.0,
           "td_length_ratio": 0.5,
           "td_maxheight": 2.0,
@@ -190,7 +189,6 @@
         {
           "td_allow_use_two_tracks": true,
           "td_curve_segcount": 0,
-          "td_enabled": false,
           "td_height_ratio": 1.0,
           "td_length_ratio": 0.5,
           "td_maxheight": 2.0,
@@ -202,7 +200,6 @@
         {
           "td_allow_use_two_tracks": true,
           "td_curve_segcount": 0,
-          "td_enabled": false,
           "td_height_ratio": 1.0,
           "td_length_ratio": 0.5,
           "td_maxheight": 2.0,
@@ -648,8 +645,8 @@
     "meta": {
       "version": 5
     },
-    "net_colors": {},
-    "netclass_assignments": {},
+    "net_colors": null,
+    "netclass_assignments": null,
     "netclass_patterns": [
       {
         "netclass": "Default",
@@ -1458,7 +1455,7 @@
         "uuid": "9a9dbedc-f647-45f6-bf2f-0ae89a9fba5f"
       }
     ],
-    "used_designators": "#PWR1-28,A1,C1,HW133AF1,J1,LCD1,LED1,M1-4,MST1,U1-4",
+    "used_designators": "#PWR1-28,A1,LCD1,C1,HW133AF1,LED1,J1,M1-4,MST1,U1-4",
     "variants": []
   },
   "sheets": [
